@@ -106,7 +106,7 @@ func RedisDelKey(key string) error {
 
 func RedisHSetObj(key string, obj interface{}, expiration time.Duration) error {
 	if DebugEnabled {
-		SysLog(fmt.Sprintf("Redis HSET: key=%s, obj=%+v, expiration=%v", key, obj, expiration))
+		SysLog(fmt.Sprintf("Redis HSET: key=%s, expiration=%v", key, expiration))
 	}
 	ctx := context.Background()
 

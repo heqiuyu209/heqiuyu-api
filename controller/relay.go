@@ -419,7 +419,6 @@ func RelayMidjourney(c *gin.Context) {
 		mjErr = relay.RelayMidjourneySubmit(c, relayInfo)
 	}
 	//err = relayMidjourneySubmit(c, relayMode)
-	log.Println(mjErr)
 	if mjErr != nil {
 		statusCode := http.StatusBadRequest
 		if mjErr.Code == 30 {
