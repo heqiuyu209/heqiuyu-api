@@ -46,11 +46,6 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/oauth/:provider", middleware.CriticalRateLimit(), controller.HandleOAuth)
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)
 
-		apiRouter.POST("/stripe/webhook", controller.StripeWebhook)
-		apiRouter.POST("/creem/webhook", controller.CreemWebhook)
-		apiRouter.POST("/waffo/webhook", controller.WaffoWebhook)
-		//apiRouter.POST("/waffo-pancake/webhook", controller.WaffoPancakeWebhook)
-
 		// Universal secure verification routes
 		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.UniversalVerify)
 
@@ -63,8 +58,6 @@ func SetApiRouter(router *gin.Engine) {
 			userRoute.POST("/passkey/login/finish", middleware.CriticalRateLimit(), controller.PasskeyLoginFinish)
 			//userRoute.POST("/tokenlog", middleware.CriticalRateLimit(), controller.TokenLog)
 			userRoute.GET("/logout", controller.Logout)
-			userRoute.POST("/epay/notify", controller.EpayNotify)
-			userRoute.GET("/epay/notify", controller.EpayNotify)
 			userRoute.GET("/groups", controller.GetUserGroups)
 
 			selfRoute := userRoute.Group("/")
@@ -83,18 +76,6 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/passkey/verify/finish", controller.PasskeyVerifyFinish)
 				selfRoute.DELETE("/passkey", controller.PasskeyDelete)
 				selfRoute.GET("/aff", controller.GetAffCode)
-				selfRoute.GET("/topup/info", controller.GetTopUpInfo)
-				selfRoute.GET("/topup/self", controller.GetUserTopUps)
-				selfRoute.POST("/topup", middleware.CriticalRateLimit(), controller.TopUp)
-				selfRoute.POST("/pay", middleware.CriticalRateLimit(), controller.RequestEpay)
-				selfRoute.POST("/amount", controller.RequestAmount)
-				selfRoute.POST("/stripe/pay", middleware.CriticalRateLimit(), controller.RequestStripePay)
-				selfRoute.POST("/stripe/amount", controller.RequestStripeAmount)
-				selfRoute.POST("/creem/pay", middleware.CriticalRateLimit(), controller.RequestCreemPay)
-				selfRoute.POST("/waffo/amount", controller.RequestWaffoAmount)
-				selfRoute.POST("/waffo/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPay)
-				//selfRoute.POST("/waffo-pancake/amount", controller.RequestWaffoPancakeAmount)
-				//selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 
@@ -118,8 +99,6 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.Use(middleware.AdminAuth())
 			{
 				adminRoute.GET("/", controller.GetAllUsers)
-				adminRoute.GET("/topup", controller.GetAllTopUps)
-				adminRoute.POST("/topup/complete", controller.AdminCompleteTopUp)
 				adminRoute.GET("/search", controller.SearchUsers)
 				adminRoute.GET("/:id/oauth/bindings", controller.GetUserOAuthBindingsByAdmin)
 				adminRoute.DELETE("/:id/oauth/bindings/:provider_id", controller.UnbindCustomOAuthByAdmin)
@@ -137,38 +116,6 @@ func SetApiRouter(router *gin.Engine) {
 			}
 		}
 
-		// Subscription billing (plans, purchase, admin management)
-		subscriptionRoute := apiRouter.Group("/subscription")
-		subscriptionRoute.Use(middleware.UserAuth())
-		{
-			subscriptionRoute.GET("/plans", controller.GetSubscriptionPlans)
-			subscriptionRoute.GET("/self", controller.GetSubscriptionSelf)
-			subscriptionRoute.PUT("/self/preference", controller.UpdateSubscriptionPreference)
-			subscriptionRoute.POST("/epay/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestEpay)
-			subscriptionRoute.POST("/stripe/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestStripePay)
-			subscriptionRoute.POST("/creem/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestCreemPay)
-		}
-		subscriptionAdminRoute := apiRouter.Group("/subscription/admin")
-		subscriptionAdminRoute.Use(middleware.AdminAuth())
-		{
-			subscriptionAdminRoute.GET("/plans", controller.AdminListSubscriptionPlans)
-			subscriptionAdminRoute.POST("/plans", controller.AdminCreateSubscriptionPlan)
-			subscriptionAdminRoute.PUT("/plans/:id", controller.AdminUpdateSubscriptionPlan)
-			subscriptionAdminRoute.PATCH("/plans/:id", controller.AdminUpdateSubscriptionPlanStatus)
-			subscriptionAdminRoute.POST("/bind", controller.AdminBindSubscription)
-
-			// User subscription management (admin)
-			subscriptionAdminRoute.GET("/users/:id/subscriptions", controller.AdminListUserSubscriptions)
-			subscriptionAdminRoute.POST("/users/:id/subscriptions", controller.AdminCreateUserSubscription)
-			subscriptionAdminRoute.POST("/user_subscriptions/:id/invalidate", controller.AdminInvalidateUserSubscription)
-			subscriptionAdminRoute.DELETE("/user_subscriptions/:id", controller.AdminDeleteUserSubscription)
-		}
-
-		// Subscription payment callbacks (no auth)
-		apiRouter.POST("/subscription/epay/notify", controller.SubscriptionEpayNotify)
-		apiRouter.GET("/subscription/epay/notify", controller.SubscriptionEpayNotify)
-		apiRouter.GET("/subscription/epay/return", controller.SubscriptionEpayReturn)
-		apiRouter.POST("/subscription/epay/return", controller.SubscriptionEpayReturn)
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{

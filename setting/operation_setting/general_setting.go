@@ -10,6 +10,9 @@ const (
 	QuotaDisplayTypeCustom = "CUSTOM"
 )
 
+// USDExchangeRate 人民币额度展示时使用的 USD→CNY 汇率（原属支付模块，迁至通用设置供通用额度展示使用）
+var USDExchangeRate = 7.3
+
 type GeneralSetting struct {
 	DocsLink            string `json:"docs_link"`
 	PingIntervalEnabled bool   `json:"ping_interval_enabled"`
