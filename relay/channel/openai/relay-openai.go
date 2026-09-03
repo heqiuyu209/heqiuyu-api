@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -347,6 +348,41 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 	receiveChan := make(chan []byte, 100)
 	errChan := make(chan error, 2)
 
+	// E: 心跳保活与读写超时 —— 防止空闲连接被中间设备切断、死连接悬挂无法回收
+	const (
+		realtimePongWait   = 60 * time.Second
+		realtimePingPeriod = 30 * time.Second
+	)
+	_ = clientConn.SetReadDeadline(time.Now().Add(realtimePongWait))
+	clientConn.SetPongHandler(func(string) error {
+		return clientConn.SetReadDeadline(time.Now().Add(realtimePongWait))
+	})
+	_ = targetConn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	targetConn.SetPongHandler(func(string) error {
+		return targetConn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	})
+	// 周期 ping 两个连接，写超时由 deadline 控制
+	gopool.Go(func() {
+		ticker := time.NewTicker(realtimePingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-c.Done():
+				return
+			case <-ticker.C:
+				dl := time.Now().Add(realtimePongWait)
+				_ = clientConn.SetWriteDeadline(dl)
+				if err := clientConn.WriteControl(websocket.PingMessage, nil, dl); err != nil {
+					return
+				}
+				_ = targetConn.SetWriteDeadline(dl)
+				if err := targetConn.WriteControl(websocket.PingMessage, nil, dl); err != nil {
+					return
+				}
+			}
+		}
+	})
+
 	usage := &dto.RealtimeUsage{}
 	localUsage := &dto.RealtimeUsage{}
 	sumUsage := &dto.RealtimeUsage{}
@@ -525,6 +561,11 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 		logger.LogError(c, "realtime error: "+err.Error())
 	case <-c.Done():
 	}
+
+	// E: 收尾主动关闭客户端 WebSocket，通知对端并释放资源
+	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+	_ = clientConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
+	_ = clientConn.Close()
 
 	if usage.TotalTokens != 0 {
 		_ = preConsumeUsage(c, info, usage, sumUsage)
