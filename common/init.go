@@ -46,19 +46,35 @@ func InitEnv() {
 		os.Exit(0)
 	}
 
-	if os.Getenv("SESSION_SECRET") != "" {
-		ss := os.Getenv("SESSION_SECRET")
-		if ss == "random_string" {
+	sessionSecret := os.Getenv("SESSION_SECRET")
+	cryptoSecret := os.Getenv("CRYPTO_SECRET")
+	if sessionSecret != "" {
+		if sessionSecret == "random_string" {
 			log.Println("WARNING: SESSION_SECRET is set to the default value 'random_string', please change it to a random string.")
 			log.Println("警告：SESSION_SECRET被设置为默认值'random_string'，请修改为随机字符串。")
 			log.Fatal("Please set SESSION_SECRET to a random string.")
-		} else {
-			SessionSecret = ss
 		}
-	}
-	if os.Getenv("CRYPTO_SECRET") != "" {
-		CryptoSecret = os.Getenv("CRYPTO_SECRET")
+		if len(sessionSecret) < 6 {
+			log.Fatalf("SESSION_SECRET is too short (len=%d). Please set a random string with length >= 6.", len(sessionSecret))
+		}
+		SessionSecret = sessionSecret
 	} else {
+		// SESSION_SECRET 未配置：开发模式(DEBUG=true)允许自动生成随机值并提示；生产模式拒绝启动
+		if os.Getenv("DEBUG") != "true" {
+			log.Fatal("SESSION_SECRET is not set. Please set SESSION_SECRET (random string length >= 6) before starting. In dev mode, set DEBUG=true to auto-generate.")
+		}
+		log.Println("WARNING: SESSION_SECRET is not set. A random value is generated for this run; sessions will be invalidated after restart. Please set SESSION_SECRET in production.")
+	}
+	if cryptoSecret != "" {
+		if len(cryptoSecret) < 16 {
+			log.Fatalf("CRYPTO_SECRET is too short (len=%d). Please set a random string with length >= 16.", len(cryptoSecret))
+		}
+		CryptoSecret = cryptoSecret
+	} else {
+		if len(SessionSecret) < 16 {
+			log.Fatal("CRYPTO_SECRET is not set and SESSION_SECRET is too short to be used as fallback (need >= 16 bytes). Please set CRYPTO_SECRET explicitly.")
+		}
+		// 兼容：未配置 CRYPTO_SECRET 时回退到 SESSION_SECRET（须 >= 16 字节才能作为 AES 密钥）
 		CryptoSecret = SessionSecret
 	}
 	if os.Getenv("SQLITE_PATH") != "" {
