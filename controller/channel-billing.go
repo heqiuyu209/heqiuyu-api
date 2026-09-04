@@ -9,12 +9,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/setting/operation_setting"
+	"github.com/heqiuyu/heqiuyu-api/types"
 
 	"github.com/shopspring/decimal"
 

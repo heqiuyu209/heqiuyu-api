@@ -49,7 +49,7 @@ function getServerAddress(): string {
 
 function encodeConnectionString(key: string, url: string): string {
   return JSON.stringify({
-    _type: 'newapi_channel_conn',
+    _type: 'heqiuyu_channel_conn',
     key,
     url,
   })

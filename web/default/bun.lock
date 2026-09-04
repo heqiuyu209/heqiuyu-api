@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "newapi-web",
+      "name": "heqiuyu-web",
       "dependencies": {
         "@fontsource-variable/public-sans": "^5.2.7",
         "@hookform/resolvers": "^5.2.2",

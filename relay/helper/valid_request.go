@@ -7,11 +7,11 @@ import (
 	"math"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	relayconstant "github.com/QuantumNous/new-api/relay/constant"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	relayconstant "github.com/heqiuyu/heqiuyu-api/relay/constant"
+	"github.com/heqiuyu/heqiuyu-api/types"
 	"github.com/samber/lo"
 
 	"github.com/gin-gonic/gin"

@@ -13,8 +13,8 @@ web/classic/dist
 web/node_modules
 web/dist
 .env
-one-api
-new-api
+heqiuyu-api
+heqiuyu-api
 /__debug_bin*
 .DS_Store
 tiktoken_cache

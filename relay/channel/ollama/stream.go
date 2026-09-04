@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/helper"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/relay/helper"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -63,7 +63,7 @@ func toUnix(ts string) int64 {
 	return t.Unix()
 }
 
-func ollamaStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+func ollamaStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.HeqiuyuError) {
 	if resp == nil || resp.Body == nil {
 		return nil, types.NewOpenAIError(fmt.Errorf("empty response"), types.ErrorCodeBadResponse, http.StatusBadRequest)
 	}
@@ -181,7 +181,7 @@ func ollamaStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 }
 
 // non-stream handler for chat/generate
-func ollamaChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+func ollamaChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.HeqiuyuError) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)

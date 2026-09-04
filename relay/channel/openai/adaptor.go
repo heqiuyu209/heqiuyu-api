@@ -12,24 +12,24 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/relay/channel"
-	"github.com/QuantumNous/new-api/relay/channel/ai360"
-	"github.com/QuantumNous/new-api/relay/channel/lingyiwanwu"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	"github.com/heqiuyu/heqiuyu-api/relay/channel"
+	"github.com/heqiuyu/heqiuyu-api/relay/channel/ai360"
+	"github.com/heqiuyu/heqiuyu-api/relay/channel/lingyiwanwu"
 
-	//"github.com/QuantumNous/new-api/relay/channel/minimax"
-	"github.com/QuantumNous/new-api/relay/channel/openrouter"
-	"github.com/QuantumNous/new-api/relay/channel/xinference"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/common_handler"
-	relayconstant "github.com/QuantumNous/new-api/relay/constant"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/model_setting"
-	"github.com/QuantumNous/new-api/setting/reasoning"
-	"github.com/QuantumNous/new-api/types"
+	//"github.com/heqiuyu/heqiuyu-api/relay/channel/minimax"
+	"github.com/heqiuyu/heqiuyu-api/relay/channel/openrouter"
+	"github.com/heqiuyu/heqiuyu-api/relay/channel/xinference"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/relay/common_handler"
+	relayconstant "github.com/heqiuyu/heqiuyu-api/relay/constant"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/setting/model_setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/reasoning"
+	"github.com/heqiuyu/heqiuyu-api/types"
 	"github.com/samber/lo"
 
 	"github.com/gin-gonic/gin"
@@ -220,7 +220,7 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 			header.Set("HTTP-Referer", "https://www.newapi.ai")
 		}
 		if header.Get("X-OpenRouter-Title") == "" {
-			header.Set("X-OpenRouter-Title", "New API")
+			header.Set("X-OpenRouter-Title", "heqiuyu")
 		}
 	}
 	return nil
@@ -602,7 +602,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 	}
 }
 
-func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
+func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.HeqiuyuError) {
 	switch info.RelayMode {
 	case relayconstant.RelayModeRealtime:
 		err, usage = OpenaiRealtimeHandler(c, info)

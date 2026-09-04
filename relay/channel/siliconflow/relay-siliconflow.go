@@ -5,15 +5,15 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/QuantumNous/new-api/dto"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/types"
 
 	"github.com/gin-gonic/gin"
 )
 
-func siliconflowRerankHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+func siliconflowRerankHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.HeqiuyuError) {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)

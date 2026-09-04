@@ -7,14 +7,14 @@ import (
 	"math"
 	"net/http"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/helper"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/relay/helper"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -111,7 +111,7 @@ func OpenaiTTSHandler(c *gin.Context, resp *http.Response, info *relaycommon.Rel
 	return usage
 }
 
-func OpenaiSTTHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo, responseFormat string) (*types.NewAPIError, *dto.Usage) {
+func OpenaiSTTHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo, responseFormat string) (*types.HeqiuyuError, *dto.Usage) {
 	defer service.CloseResponseBodyGracefully(resp)
 
 	responseBody, err := io.ReadAll(resp.Body)

@@ -9,13 +9,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
 )

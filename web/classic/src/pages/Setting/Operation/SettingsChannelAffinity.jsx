@@ -1161,7 +1161,7 @@ export default function SettingsChannelAffinity(props) {
                         )}
                         <br />
                         {t(
-                          'NewAPI 默认不会将入口请求的 User-Agent 透传到上游渠道；该条件仅用于识别访问本站点的客户端。',
+                          'heqiuyu 默认不会将入口请求的 User-Agent 透传到上游渠道；该条件仅用于识别访问本站点的客户端。',
                         )}
                         <br />
                         {t(

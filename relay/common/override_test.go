@@ -6,11 +6,11 @@ import (
 	"reflect"
 	"testing"
 
-	common2 "github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/types"
+	common2 "github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/types"
 
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/setting/model_setting"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/setting/model_setting"
 	"github.com/samber/lo"
 )
 

@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
-	passkeysvc "github.com/QuantumNous/new-api/service/passkey"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	passkeysvc "github.com/heqiuyu/heqiuyu-api/service/passkey"
+	"github.com/heqiuyu/heqiuyu-api/setting/system_setting"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

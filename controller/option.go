@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/console_setting"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/console_setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/operation_setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/ratio_setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
 )

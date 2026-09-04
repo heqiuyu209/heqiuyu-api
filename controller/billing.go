@@ -1,10 +1,10 @@
 package controller
 
 import (
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/setting/operation_setting"
+	"github.com/heqiuyu/heqiuyu-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -83,7 +83,7 @@ func GetUsage(c *gin.Context) {
 	if err != nil {
 		openAIError := types.OpenAIError{
 			Message: err.Error(),
-			Type:    "new_api_error",
+			Type:    "heqiuyu_api_error",
 		}
 		c.JSON(200, gin.H{
 			"error": openAIError,

@@ -13,10 +13,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	"github.com/heqiuyu/heqiuyu-api/types"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/image/webp"

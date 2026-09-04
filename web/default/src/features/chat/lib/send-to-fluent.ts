@@ -3,13 +3,13 @@ export function sendToFluent(apiKey: string, serverAddress?: string): boolean {
     return false
   }
 
-  const container = document.getElementById('fluent-new-api-container')
+  const container = document.getElementById('fluent-heqiuyu-api-container')
   if (!container) {
     return false
   }
 
   const payload = {
-    id: 'new-api',
+    id: 'heqiuyu-api',
     baseUrl: serverAddress || window.location.origin,
     apiKey: `sk-${apiKey}`,
   }

@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/relay/channel/codex"
-	"github.com/QuantumNous/new-api/service"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/relay/channel/codex"
+	"github.com/heqiuyu/heqiuyu-api/service"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

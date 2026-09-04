@@ -1,8 +1,8 @@
 <div align="center">
 
-![new-api](/web/default/public/logo.png)
+![heqiuyu-api](/web/default/public/logo.png)
 
-# New API
+# heqiuyu
 
 🍥 **次世代大規模モデルゲートウェイとAI資産管理システム**
 
@@ -31,14 +31,14 @@
 
 <p align="center">
   <a href="https://trendshift.io/repositories/20180" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/20180" alt="QuantumNous%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
+    <img src="https://trendshift.io/api/badge/repositories/20180" alt="QuantumNous%2Fheqiuyu-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
   </a>
   <br>
   <a href="https://hellogithub.com/repository/QuantumNous/new-api" target="_blank">
     <img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=539ac4217e69431684ad4a0bab768811&claim_uid=tbFPfKIDHpc4TzR" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" />
   </a><!--
   --><a href="https://www.producthunt.com/products/new-api/launches/new-api?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-new-api" target="_blank" rel="noopener noreferrer">
-    <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1047693&theme=light&t=1769577875005" alt="New API - All-in-one AI asset management gateway. | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" />
+    <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1047693&theme=light&t=1769577875005" alt="heqiuyu - All-in-one AI asset management gateway. | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" />
   </a>
 </p>
 
@@ -111,7 +111,7 @@
 ```bash
 # プロジェクトをクローン
 git clone https://github.com/QuantumNous/new-api.git
-cd new-api
+cd heqiuyu-api
 
 # docker-compose.yml 設定を編集
 nano docker-compose.yml
@@ -128,14 +128,14 @@ docker-compose up -d
 docker pull calciumion/new-api:latest
 
 # SQLiteを使用（デフォルト）
-docker run --name new-api -d --restart always \
+docker run --name heqiuyu-api -d --restart always \
   -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
   calciumion/new-api:latest
 
 # MySQLを使用
-docker run --name new-api -d --restart always \
+docker run --name heqiuyu-api -d --restart always \
   -p 3000:3000 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
@@ -185,7 +185,7 @@ docker run --name new-api -d --restart always \
 |------|------|
 | 🎨 新しいUI | モダンなユーザーインターフェースデザイン |
 | 🌍 多言語 | 簡体字中国語、繁体字中国語、英語、フランス語、日本語をサポート |
-| 🔄 データ互換性 | オリジナルのOne APIデータベースと完全に互換性あり |
+| 🔄 データ互換性 | オリジナルのheqiuyuデータベースと完全に互換性あり |
 | 📈 データダッシュボード | ビジュアルコンソールと統計分析 |
 | 🔒 権限管理 | トークングループ化、モデル制限、ユーザー管理 |
 
@@ -320,12 +320,12 @@ docker run --name new-api -d --restart always \
 | `AZURE_DEFAULT_API_VERSION` | Azure APIバージョン | `2025-04-01-preview` |
 | `ERROR_LOG_ENABLED` | エラーログスイッチ | `false` |
 | `PYROSCOPE_URL` | Pyroscopeサーバーのアドレス | - |
-| `PYROSCOPE_APP_NAME` | Pyroscopeアプリ名 | `new-api` |
+| `PYROSCOPE_APP_NAME` | Pyroscopeアプリ名 | `heqiuyu-api` |
 | `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope Basic Authユーザー | - |
 | `PYROSCOPE_BASIC_AUTH_PASSWORD` | Pyroscope Basic Authパスワード | - |
 | `PYROSCOPE_MUTEX_RATE` | Pyroscope mutexサンプリング率 | `5` |
 | `PYROSCOPE_BLOCK_RATE` | Pyroscope blockサンプリング率 | `5` |
-| `HOSTNAME` | Pyroscope用のホスト名タグ | `new-api` |
+| `HOSTNAME` | Pyroscope用のホスト名タグ | `heqiuyu-api` |
 
 📖 **完全な設定:** [環境変数ドキュメント](https://docs.newapi.pro/ja/docs/installation/config-maintenance/environment-variables)
 
@@ -339,7 +339,7 @@ docker run --name new-api -d --restart always \
 ```bash
 # プロジェクトをクローン
 git clone https://github.com/QuantumNous/new-api.git
-cd new-api
+cd heqiuyu-api
 
 # 設定を編集
 nano docker-compose.yml
@@ -355,7 +355,7 @@ docker-compose up -d
 
 **SQLiteを使用:**
 ```bash
-docker run --name new-api -d --restart always \
+docker run --name heqiuyu-api -d --restart always \
   -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
@@ -364,7 +364,7 @@ docker run --name new-api -d --restart always \
 
 **MySQLを使用:**
 ```bash
-docker run --name new-api -d --restart always \
+docker run --name heqiuyu-api -d --restart always \
   -p 3000:3000 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
@@ -409,7 +409,7 @@ docker run --name new-api -d --restart always \
 
 | プロジェクト | 説明 |
 |------|------|
-| [One API](https://github.com/songquanpeng/one-api) | オリジナルプロジェクトベース |
+| [heqiuyu](https://github.com/songquanpeng/one-api) | オリジナルプロジェクトベース |
 | [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourneyインターフェースサポート |
 
 ### 補助ツール
@@ -417,7 +417,7 @@ docker run --name new-api -d --restart always \
 | プロジェクト | 説明 |
 |------|------|
 | [neko-api-key-tool](https://github.com/Calcium-Ion/neko-api-key-tool) | キー使用量クォータ照会ツール |
-| [new-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | New API高性能最適化版 |
+| [heqiuyu-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | heqiuyu高性能最適化版 |
 
 ---
 
@@ -447,7 +447,7 @@ docker run --name new-api -d --restart always \
 
 このプロジェクトは [GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE) の下でライセンスされています。
 
-本プロジェクトは、[One API](https://github.com/songquanpeng/one-api)（MITライセンス）をベースに開発されたオープンソースプロジェクトです。
+本プロジェクトは、[heqiuyu](https://github.com/songquanpeng/one-api)（MITライセンス）をベースに開発されたオープンソースプロジェクトです。
 
 お客様の組織のポリシーがAGPLv3ライセンスのソフトウェアの使用を許可していない場合、またはAGPLv3のオープンソース義務を回避したい場合は、こちらまでお問い合わせください：[support@quantumnous.com](mailto:support@quantumnous.com)
 
@@ -465,7 +465,7 @@ docker run --name new-api -d --restart always \
 
 <div align="center">
 
-### 💖 New APIをご利用いただきありがとうございます
+### 💖 heqiuyuをご利用いただきありがとうございます
 
 このプロジェクトがあなたのお役に立てたなら、ぜひ ⭐️ スターをください！
 

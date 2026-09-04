@@ -233,7 +233,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     }
     if (url.includes('{cherryConfig}') === true) {
       let cherryConfig = {
-        id: 'new-api',
+        id: 'heqiuyu-api',
         baseUrl: serverAddress,
         apiKey: `sk-${fullKey}`,
       };
@@ -243,7 +243,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       url = url.replaceAll('{cherryConfig}', encodedConfig);
     } else if (url.includes('{aionuiConfig}') === true) {
       let aionuiConfig = {
-        platform: 'new-api',
+        platform: 'heqiuyu-api',
         baseUrl: serverAddress,
         apiKey: `sk-${fullKey}`,
       };

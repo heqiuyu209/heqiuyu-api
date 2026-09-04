@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/heqiuyu/heqiuyu-api/setting/config"
 )
 
 // ---------------------------------------------------------------------------

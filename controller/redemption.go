@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/i18n"
-	"github.com/QuantumNous/new-api/model"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/i18n"
+	"github.com/heqiuyu/heqiuyu-api/model"
 
 	"github.com/gin-gonic/gin"
 )

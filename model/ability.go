@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/heqiuyu/heqiuyu-api/common"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"

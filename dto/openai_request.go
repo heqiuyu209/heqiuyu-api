@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/types"
 	"github.com/samber/lo"
 
 	"github.com/gin-gonic/gin"

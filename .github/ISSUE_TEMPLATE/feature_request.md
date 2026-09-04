@@ -13,7 +13,7 @@ assignees: ''
 - 使用问题先看或先问：https://deepwiki.com/QuantumNous/new-api
 - 警告：删除本模板、删除小节标题或随意清空内容的 issue，可能会被直接关闭；重复恶意提交者可能会被 block。
 
-**您当前的 newapi 版本**
+**您当前的 heqiuyu 版本**
 
 请填写，例如：`v1.0.0`
 

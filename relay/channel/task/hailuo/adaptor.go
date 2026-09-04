@@ -9,17 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/model"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/relay/channel"
-	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/service"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/relay/channel"
+	taskcommon "github.com/heqiuyu/heqiuyu-api/relay/channel/task/taskcommon"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/service"
 )
 
 // https://platform.minimaxi.com/docs/api-reference/video-generation-intro

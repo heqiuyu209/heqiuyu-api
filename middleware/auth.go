@@ -8,14 +8,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/i18n"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/i18n"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/setting/ratio_setting"
+	"github.com/heqiuyu/heqiuyu-api/types"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -92,8 +92,8 @@ func authHelper(c *gin.Context, minRole int) {
 			return
 		}
 	}
-	// get header New-Api-User
-	apiUserIdStr := c.Request.Header.Get("New-Api-User")
+	// get header Heqiuyu-Api-User
+	apiUserIdStr := c.Request.Header.Get("Heqiuyu-Api-User")
 	if apiUserIdStr == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -144,7 +144,7 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	// 防止不同newapi版本冲突，导致数据不通用
+	// 防止不同 heqiuyu 版本冲突，导致数据不通用
 	c.Header("Auth-Version", "864b7076dbcd0a3c01b5520316720ebf")
 	c.Set("username", username)
 	c.Set("role", role)

@@ -1,13 +1,13 @@
 package relay
 
 import (
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/types"
 )
 
-func newAPIErrorFromParamOverride(err error) *types.NewAPIError {
+func newAPIErrorFromParamOverride(err error) *types.HeqiuyuError {
 	if fixedErr, ok := relaycommon.AsParamOverrideReturnError(err); ok {
-		return relaycommon.NewAPIErrorFromParamOverride(fixedErr)
+		return relaycommon.HeqiuyuErrorFromParamOverride(fixedErr)
 	}
 	return types.NewError(err, types.ErrorCodeChannelParamOverrideInvalid, types.ErrOptionWithSkipRetry())
 }

@@ -60,7 +60,7 @@ export function Footer(props: FooterProps) {
   } = useSystemConfig()
 
   const displayLogo = systemLogo || props.logo || '/logo.png'
-  const displayName = systemName || props.name || 'New API'
+  const displayName = systemName || props.name || 'heqiuyu'
   const isDemoSiteMode = Boolean(demoSiteEnabled)
   const currentYear = new Date().getFullYear()
 

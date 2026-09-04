@@ -31,7 +31,7 @@ export let API = axios.create({
     ? import.meta.env.VITE_REACT_APP_SERVER_URL
     : '',
   headers: {
-    'New-API-User': getUserIdFromLocalStorage(),
+    'Heqiuyu-Api-User': getUserIdFromLocalStorage(),
     'Cache-Control': 'no-store',
   },
 });
@@ -86,7 +86,7 @@ export function updateAPI() {
       ? import.meta.env.VITE_REACT_APP_SERVER_URL
       : '',
     headers: {
-      'New-API-User': getUserIdFromLocalStorage(),
+      'Heqiuyu-Api-User': getUserIdFromLocalStorage(),
       'Cache-Control': 'no-store',
     },
   });

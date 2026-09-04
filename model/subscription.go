@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/pkg/cachex"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/pkg/cachex"
 	"github.com/samber/hot"
 	"gorm.io/gorm"
 )
@@ -38,8 +38,8 @@ var (
 )
 
 const (
-	subscriptionPlanCacheNamespace     = "new-api:subscription_plan:v1"
-	subscriptionPlanInfoCacheNamespace = "new-api:subscription_plan_info:v1"
+	subscriptionPlanCacheNamespace     = "heqiuyu-api:subscription_plan:v1"
+	subscriptionPlanInfoCacheNamespace = "heqiuyu-api:subscription_plan_info:v1"
 )
 
 var (

@@ -4,16 +4,16 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/QuantumNous/new-api/middleware"
-	"github.com/QuantumNous/new-api/model"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/middleware"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/types"
 
 	"github.com/gin-gonic/gin"
 )
 
 func Playground(c *gin.Context) {
-	var newAPIError *types.NewAPIError
+	var newAPIError *types.HeqiuyuError
 
 	defer func() {
 		if newAPIError != nil {

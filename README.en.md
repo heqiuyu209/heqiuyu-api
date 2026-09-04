@@ -1,8 +1,8 @@
 <div align="center">
 
-![new-api](/web/default/public/logo.png)
+![heqiuyu-api](/web/default/public/logo.png)
 
-# New API
+# heqiuyu
 
 🍥 **Next-Generation Large Model Gateway and AI Asset Management System**
 
@@ -33,7 +33,7 @@
 
 <p align="center">
   <a href="https://trendshift.io/repositories/8227" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/8227" alt="Calcium-Ion%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
+    <img src="https://trendshift.io/api/badge/repositories/8227" alt="Calcium-Ion%2Fheqiuyu-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
   </a>
 </p>
 
@@ -50,7 +50,7 @@
 ## 📝 Project Description
 
 > [!NOTE]  
-> This is an open-source project developed based on [One API](https://github.com/songquanpeng/one-api)
+> This is an open-source project developed based on [heqiuyu](https://github.com/songquanpeng/one-api)
 
 > [!IMPORTANT]  
 > - This project is for personal learning purposes only, with no guarantee of stability or technical support
@@ -106,7 +106,7 @@
 ```bash
 # Clone the project
 git clone https://github.com/QuantumNous/new-api.git
-cd new-api
+cd heqiuyu-api
 
 # Edit docker-compose.yml configuration
 nano docker-compose.yml
@@ -123,14 +123,14 @@ docker-compose up -d
 docker pull calciumion/new-api:latest
 
 # Using SQLite (default)
-docker run --name new-api -d --restart always \
+docker run --name heqiuyu-api -d --restart always \
   -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
   calciumion/new-api:latest
 
 # Using MySQL
-docker run --name new-api -d --restart always \
+docker run --name heqiuyu-api -d --restart always \
   -p 3000:3000 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
@@ -180,7 +180,7 @@ docker run --name new-api -d --restart always \
 |------|------|
 | 🎨 New UI | Modern user interface design |
 | 🌍 Multi-language | Supports Chinese, English, French, Japanese |
-| 🔄 Data Compatibility | Fully compatible with the original One API database |
+| 🔄 Data Compatibility | Fully compatible with the original heqiuyu database |
 | 📈 Data Dashboard | Visual console and statistical analysis |
 | 🔒 Permission Management | Token grouping, model restrictions, user management |
 
@@ -311,12 +311,12 @@ docker run --name new-api -d --restart always \
 | `AZURE_DEFAULT_API_VERSION` | Azure API version | `2025-04-01-preview` |
 | `ERROR_LOG_ENABLED` | Error log switch | `false` |
 | `PYROSCOPE_URL` | Pyroscope server address | - |
-| `PYROSCOPE_APP_NAME` | Pyroscope application name | `new-api` |
+| `PYROSCOPE_APP_NAME` | Pyroscope application name | `heqiuyu-api` |
 | `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope basic auth user | - |
 | `PYROSCOPE_BASIC_AUTH_PASSWORD` | Pyroscope basic auth password | - |
 | `PYROSCOPE_MUTEX_RATE` | Pyroscope mutex sampling rate | `5` |
 | `PYROSCOPE_BLOCK_RATE` | Pyroscope block sampling rate | `5` |
-| `HOSTNAME` | Hostname tag for Pyroscope | `new-api` |
+| `HOSTNAME` | Hostname tag for Pyroscope | `heqiuyu-api` |
 
 📖 **Complete configuration:** [Environment Variables Documentation](https://docs.newapi.pro/en/docs/installation/config-maintenance/environment-variables)
 
@@ -330,7 +330,7 @@ docker run --name new-api -d --restart always \
 ```bash
 # Clone the project
 git clone https://github.com/QuantumNous/new-api.git
-cd new-api
+cd heqiuyu-api
 
 # Edit configuration
 nano docker-compose.yml
@@ -346,7 +346,7 @@ docker-compose up -d
 
 **Using SQLite:**
 ```bash
-docker run --name new-api -d --restart always \
+docker run --name heqiuyu-api -d --restart always \
   -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
@@ -355,7 +355,7 @@ docker run --name new-api -d --restart always \
 
 **Using MySQL:**
 ```bash
-docker run --name new-api -d --restart always \
+docker run --name heqiuyu-api -d --restart always \
   -p 3000:3000 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
@@ -402,7 +402,7 @@ docker run --name new-api -d --restart always \
 
 | Project | Description |
 |------|------|
-| [One API](https://github.com/songquanpeng/one-api) | Original project base |
+| [heqiuyu](https://github.com/songquanpeng/one-api) | Original project base |
 | [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourney interface support |
 
 ### Supporting Tools
@@ -410,7 +410,7 @@ docker run --name new-api -d --restart always \
 | Project | Description |
 |------|------|
 | [neko-api-key-tool](https://github.com/Calcium-Ion/neko-api-key-tool) | Key quota query tool |
-| [new-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | New API high-performance optimized version |
+| [heqiuyu-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | heqiuyu high-performance optimized version |
 
 ---
 
@@ -448,7 +448,7 @@ Welcome all forms of contribution!
 
 <div align="center">
 
-### 💖 Thank you for using New API
+### 💖 Thank you for using heqiuyu
 
 If this project is helpful to you, welcome to give us a ⭐️ Star！
 

@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/helper"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/relay/helper"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/types"
 	"github.com/samber/lo"
 
 	"github.com/gin-gonic/gin"
@@ -29,7 +29,7 @@ func convertCf2CompletionsRequest(textRequest dto.GeneralOpenAIRequest) *CfReque
 	}
 }
 
-func cfStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*types.NewAPIError, *dto.Usage) {
+func cfStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*types.HeqiuyuError, *dto.Usage) {
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Split(bufio.ScanLines)
 
@@ -90,7 +90,7 @@ func cfStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Res
 	return nil, usage
 }
 
-func cfHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*types.NewAPIError, *dto.Usage) {
+func cfHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*types.HeqiuyuError, *dto.Usage) {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeBadResponseBody), nil
@@ -119,7 +119,7 @@ func cfHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response)
 	return nil, usage
 }
 
-func cfSTTHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*types.NewAPIError, *dto.Usage) {
+func cfSTTHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*types.HeqiuyuError, *dto.Usage) {
 	var cfResp CfAudioResponse
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {

@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/setting/billing_setting"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/setting/billing_setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/ratio_setting"
+	"github.com/heqiuyu/heqiuyu-api/types"
 )
 
 type Pricing struct {

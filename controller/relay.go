@@ -8,20 +8,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/middleware"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/relay"
-	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	relayconstant "github.com/QuantumNous/new-api/relay/constant"
-	"github.com/QuantumNous/new-api/relay/helper"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/dto"
+	"github.com/heqiuyu/heqiuyu-api/logger"
+	"github.com/heqiuyu/heqiuyu-api/middleware"
+	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/relay"
+	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	relayconstant "github.com/heqiuyu/heqiuyu-api/relay/constant"
+	"github.com/heqiuyu/heqiuyu-api/relay/helper"
+	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/operation_setting"
+	"github.com/heqiuyu/heqiuyu-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/samber/lo"
@@ -30,8 +30,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
-	var err *types.NewAPIError
+func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.HeqiuyuError {
+	var err *types.HeqiuyuError
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesGenerations, relayconstant.RelayModeImagesEdits:
 		err = relay.ImageHelper(c, info)
@@ -53,8 +53,8 @@ func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIErro
 	return err
 }
 
-func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
-	var err *types.NewAPIError
+func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.HeqiuyuError {
+	var err *types.HeqiuyuError
 	if strings.Contains(c.Request.URL.Path, "embed") {
 		err = relay.GeminiEmbeddingHandler(c, info)
 	} else {
@@ -70,7 +70,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	//originalModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 
 	var (
-		newAPIError *types.NewAPIError
+		newAPIError *types.HeqiuyuError
 		ws          *websocket.Conn
 	)
 
@@ -282,7 +282,7 @@ func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
 	return meta
 }
 
-func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.NewAPIError) {
+func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.HeqiuyuError) {
 	if info.ChannelMeta == nil {
 		autoBan := c.GetBool("auto_ban")
 		autoBanInt := 1
@@ -314,7 +314,7 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	return channel, nil
 }
 
-func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
+func shouldRetry(c *gin.Context, openaiErr *types.HeqiuyuError, retryTimes int) bool {
 	if openaiErr == nil {
 		return false
 	}
@@ -346,7 +346,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	return operation_setting.ShouldRetryByStatusCode(code)
 }
 
-func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {
+func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.HeqiuyuError) {
 	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, err.Error()))
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
@@ -438,7 +438,7 @@ func RelayMidjourney(c *gin.Context) {
 func RelayNotImplemented(c *gin.Context) {
 	err := types.OpenAIError{
 		Message: "API not implemented",
-		Type:    "new_api_error",
+		Type:    "heqiuyu_api_error",
 		Param:   "",
 		Code:    "api_not_implemented",
 	}
@@ -517,7 +517,7 @@ func RelayTask(c *gin.Context) {
 				}
 			}
 		} else {
-			var channelErr *types.NewAPIError
+			var channelErr *types.HeqiuyuError
 			channel, channelErr = getChannel(c, relayInfo, retryParam)
 			if channelErr != nil {
 				logger.LogError(c, channelErr.Error())
