@@ -7,12 +7,8 @@ import {
   Power,
   PowerOff,
   ArrowUp,
-  ArrowDown,
-  KeyRound,
-  ShieldAlert,
-  Link2,
-  CreditCard,
 } from 'lucide-react'
+
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -25,7 +21,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { UserSubscriptionsDialog } from '@/features/subscriptions/components/dialogs/user-subscriptions-dialog'
 import { manageUser, resetUserPasskey, resetUserTwoFA } from '../api'
 import {
   USER_STATUS,
@@ -49,7 +44,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [resetPasskeyOpen, setResetPasskeyOpen] = useState(false)
   const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
-  const [subscriptionsDialogOpen, setSubscriptionsDialogOpen] = useState(false)
 
   const handleEdit = () => {
     setCurrentRow(user)
@@ -188,18 +182,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             </DropdownMenuShortcut>
           </DropdownMenuItem>
 
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault()
-              setSubscriptionsDialogOpen(true)
-            }}
-          >
-            {t('Manage Subscriptions')}
-            <DropdownMenuShortcut>
-              <CreditCard size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
-
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
@@ -268,12 +250,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         onUnbindSuccess={triggerRefresh}
       />
 
-      <UserSubscriptionsDialog
-        open={subscriptionsDialogOpen}
-        onOpenChange={setSubscriptionsDialogOpen}
-        user={{ id: user.id, username: user.username }}
-        onSuccess={triggerRefresh}
-      />
     </>
   )
 }

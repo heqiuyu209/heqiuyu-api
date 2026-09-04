@@ -3,72 +3,9 @@ import { createSectionRegistry } from '../utils/section-registry'
 import { EmailSettingsSection } from './email-settings-section'
 import { IoNetDeploymentSettingsSection } from './ionet-deployment-settings-section'
 import { MonitoringSettingsSection } from './monitoring-settings-section'
-import { PaymentSettingsSection } from './payment-settings-section'
 import { WorkerSettingsSection } from './worker-settings-section'
 
 const INTEGRATIONS_SECTIONS = [
-  {
-    id: 'payment',
-    titleKey: 'Payment Gateway',
-    descriptionKey: 'Configure payment gateway integrations',
-    build: (settings: IntegrationSettings) => (
-      <PaymentSettingsSection
-        defaultValues={{
-          PayAddress: settings.PayAddress,
-          EpayId: settings.EpayId,
-          EpayKey: settings.EpayKey,
-          Price: settings.Price,
-          MinTopUp: settings.MinTopUp,
-          CustomCallbackAddress: settings.CustomCallbackAddress,
-          PayMethods: settings.PayMethods,
-          AmountOptions: settings['payment_setting.amount_options'],
-          AmountDiscount: settings['payment_setting.amount_discount'],
-          StripeApiSecret: settings.StripeApiSecret,
-          StripeWebhookSecret: settings.StripeWebhookSecret,
-          StripePriceId: settings.StripePriceId,
-          StripeUnitPrice: settings.StripeUnitPrice,
-          StripeMinTopUp: settings.StripeMinTopUp,
-          StripePromotionCodesEnabled: settings.StripePromotionCodesEnabled,
-          CreemApiKey: settings.CreemApiKey,
-          CreemWebhookSecret: settings.CreemWebhookSecret,
-          CreemTestMode: settings.CreemTestMode,
-          CreemProducts: settings.CreemProducts,
-        }}
-        waffoDefaultValues={{
-          WaffoEnabled: settings.WaffoEnabled ?? false,
-          WaffoApiKey: settings.WaffoApiKey ?? '',
-          WaffoPrivateKey: settings.WaffoPrivateKey ?? '',
-          WaffoPublicCert: settings.WaffoPublicCert ?? '',
-          WaffoSandboxPublicCert: settings.WaffoSandboxPublicCert ?? '',
-          WaffoSandboxApiKey: settings.WaffoSandboxApiKey ?? '',
-          WaffoSandboxPrivateKey: settings.WaffoSandboxPrivateKey ?? '',
-          WaffoSandbox: settings.WaffoSandbox ?? false,
-          WaffoMerchantId: settings.WaffoMerchantId ?? '',
-          WaffoCurrency: settings.WaffoCurrency ?? 'USD',
-          WaffoUnitPrice: settings.WaffoUnitPrice ?? 1,
-          WaffoMinTopUp: settings.WaffoMinTopUp ?? 1,
-          WaffoNotifyUrl: settings.WaffoNotifyUrl ?? '',
-          WaffoReturnUrl: settings.WaffoReturnUrl ?? '',
-          WaffoPayMethods: settings.WaffoPayMethods ?? '[]',
-        }}
-        waffoPancakeDefaultValues={{
-          WaffoPancakeEnabled: settings.WaffoPancakeEnabled ?? false,
-          WaffoPancakeSandbox: settings.WaffoPancakeSandbox ?? false,
-          WaffoPancakeMerchantID: settings.WaffoPancakeMerchantID ?? '',
-          WaffoPancakePrivateKey: settings.WaffoPancakePrivateKey ?? '',
-          WaffoPancakeWebhookPublicKey:
-            settings.WaffoPancakeWebhookPublicKey ?? '',
-          WaffoPancakeWebhookTestKey: settings.WaffoPancakeWebhookTestKey ?? '',
-          WaffoPancakeStoreID: settings.WaffoPancakeStoreID ?? '',
-          WaffoPancakeProductID: settings.WaffoPancakeProductID ?? '',
-          WaffoPancakeReturnURL: settings.WaffoPancakeReturnURL ?? '',
-          WaffoPancakeCurrency: settings.WaffoPancakeCurrency ?? 'USD',
-          WaffoPancakeUnitPrice: settings.WaffoPancakeUnitPrice ?? 1,
-          WaffoPancakeMinTopUp: settings.WaffoPancakeMinTopUp ?? 1,
-        }}
-      />
-    ),
-  },
   {
     id: 'email',
     titleKey: 'SMTP Email',
@@ -147,7 +84,7 @@ const integrationsRegistry = createSectionRegistry<
   IntegrationSettings
 >({
   sections: INTEGRATIONS_SECTIONS,
-  defaultSection: 'payment',
+  defaultSection: 'email',
   basePath: '/system-settings/integrations',
   urlStyle: 'path',
 })

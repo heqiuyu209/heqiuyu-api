@@ -10,9 +10,8 @@ import {
   Command,
   Radio,
   FlaskConical,
-  MessageSquare,
-  CreditCard,
 } from 'lucide-react'
+
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -106,11 +105,6 @@ export function useSidebarData(): SidebarData {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,
-          },
-          {
-            title: t('Subscription Management'),
-            url: '/subscriptions',
-            icon: CreditCard,
           },
         ],
       },

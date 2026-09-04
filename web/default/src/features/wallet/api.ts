@@ -34,14 +34,6 @@ export function isApiSuccess(response: ApiResponse): boolean {
 }
 
 /**
- * Get topup configuration info
- */
-export async function getTopupInfo(): Promise<TopupInfoResponse> {
-  const res = await api.get('/api/user/topup/info')
-  return res.data
-}
-
-/**
  * Redeem a topup code
  */
 export async function redeemTopupCode(
