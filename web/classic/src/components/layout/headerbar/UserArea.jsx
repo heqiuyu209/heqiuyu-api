@@ -24,7 +24,6 @@ import { ChevronDown } from 'lucide-react';
 import {
   IconExit,
   IconUserSetting,
-  IconCreditCard,
   IconKey,
 } from '@douyinfe/semi-icons';
 import { stringToColor } from '../../../helpers';
@@ -85,20 +84,6 @@ const UserArea = ({
                     className='text-gray-500 dark:text-gray-400'
                   />
                   <span>{t('令牌管理')}</span>
-                </div>
-              </Dropdown.Item>
-              <Dropdown.Item
-                onClick={() => {
-                  navigate('/console/topup');
-                }}
-                className='!px-3 !py-1.5 !text-sm !text-semi-color-text-0 hover:!bg-semi-color-fill-1 dark:!text-gray-200 dark:hover:!bg-blue-500 dark:hover:!text-white'
-              >
-                <div className='flex items-center gap-2'>
-                  <IconCreditCard
-                    size='small'
-                    className='text-gray-500 dark:text-gray-400'
-                  />
-                  <span>{t('钱包管理')}</span>
                 </div>
               </Dropdown.Item>
               <Dropdown.Item

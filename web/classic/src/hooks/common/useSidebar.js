@@ -41,7 +41,6 @@ export const DEFAULT_ADMIN_CONFIG = {
   },
   personal: {
     enabled: true,
-    topup: true,
     personal: true,
   },
   admin: {
@@ -51,7 +50,6 @@ export const DEFAULT_ADMIN_CONFIG = {
     deployment: true,
     redemption: true,
     user: true,
-    subscription: true,
     setting: true,
   },
 };

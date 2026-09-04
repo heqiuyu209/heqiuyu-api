@@ -135,9 +135,6 @@ const SystemSetting = () => {
       let newInputs = {};
       data.forEach((item) => {
         switch (item.key) {
-          case 'TopupGroupRatio':
-            item.value = JSON.stringify(JSON.parse(item.value), null, 2);
-            break;
           case 'EmailDomainWhitelist':
             setEmailDomainWhitelist(item.value ? item.value.split(',') : []);
             break;
@@ -205,10 +202,6 @@ const SystemSetting = () => {
           case 'passkey.user_verification':
             // 确保有默认值
             item.value = item.value || 'preferred';
-            break;
-          case 'Price':
-          case 'MinTopUp':
-            item.value = parseFloat(item.value);
             break;
           default:
             break;

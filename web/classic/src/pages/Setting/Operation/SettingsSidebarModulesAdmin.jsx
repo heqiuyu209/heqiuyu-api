@@ -55,7 +55,6 @@ export default function SettingsSidebarModulesAdmin(props) {
     },
     personal: {
       enabled: true,
-      topup: true,
       personal: true,
     },
     admin: {
@@ -65,7 +64,6 @@ export default function SettingsSidebarModulesAdmin(props) {
       deployment: true,
       redemption: true,
       user: true,
-      subscription: true,
       setting: true,
     },
   });
@@ -116,7 +114,6 @@ export default function SettingsSidebarModulesAdmin(props) {
       },
       personal: {
         enabled: true,
-        topup: true,
         personal: true,
       },
       admin: {
@@ -126,7 +123,6 @@ export default function SettingsSidebarModulesAdmin(props) {
         deployment: true,
         redemption: true,
         user: true,
-        subscription: true,
         setting: true,
       },
     };
@@ -187,7 +183,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             midjourney: true,
             task: true,
           },
-          personal: { enabled: true, topup: true, personal: true },
+          personal: { enabled: true, personal: true },
           admin: {
             enabled: true,
             channel: true,
@@ -195,7 +191,6 @@ export default function SettingsSidebarModulesAdmin(props) {
             deployment: true,
             redemption: true,
             user: true,
-            subscription: true,
             setting: true,
           },
         };
@@ -240,7 +235,6 @@ export default function SettingsSidebarModulesAdmin(props) {
       title: t('个人中心区域'),
       description: t('用户个人功能'),
       modules: [
-        { key: 'topup', title: t('钱包管理'), description: t('余额充值管理') },
         {
           key: 'personal',
           title: t('个人设置'),
@@ -259,11 +253,6 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'deployment',
           title: t('模型部署'),
           description: t('模型部署管理'),
-        },
-        {
-          key: 'subscription',
-          title: t('订阅管理'),
-          description: t('订阅套餐管理'),
         },
         {
           key: 'redemption',

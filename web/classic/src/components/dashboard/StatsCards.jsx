@@ -80,28 +80,14 @@ const StatsCards = ({
                       </div>
                     </div>
                   </div>
-                  {item.title === t('当前余额') ? (
-                    <Tag
-                      color='white'
-                      shape='circle'
-                      size='large'
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate('/console/topup');
-                      }}
-                    >
-                      {t('充值')}
-                    </Tag>
-                  ) : (
-                    (loading ||
-                      (item.trendData && item.trendData.length > 0)) && (
-                      <div className='w-24 h-10'>
-                        <VChart
-                          spec={getTrendSpec(item.trendData, item.trendColor)}
-                          option={CHART_CONFIG}
-                        />
-                      </div>
-                    )
+                  {(loading ||
+                    (item.trendData && item.trendData.length > 0)) && (
+                    <div className='w-24 h-10'>
+                      <VChart
+                        spec={getTrendSpec(item.trendData, item.trendColor)}
+                        option={CHART_CONFIG}
+                      />
+                    </div>
                   )}
                 </div>
               ))}

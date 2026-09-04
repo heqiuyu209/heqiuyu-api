@@ -35,9 +35,7 @@ const routerMap = {
   channel: '/console/channel',
   token: '/console/token',
   redemption: '/console/redemption',
-  topup: '/console/topup',
   user: '/console/user',
-  subscription: '/console/subscription',
   log: '/console/log',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
@@ -125,11 +123,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   const financeItems = useMemo(() => {
     const items = [
       {
-        text: t('钱包管理'),
-        itemKey: 'topup',
-        to: '/topup',
-      },
-      {
         text: t('个人设置'),
         itemKey: 'personal',
         to: '/personal',
@@ -151,12 +144,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('渠道管理'),
         itemKey: 'channel',
         to: '/channel',
-        className: isAdmin() ? '' : 'tableHiddle',
-      },
-      {
-        text: t('订阅管理'),
-        itemKey: 'subscription',
-        to: '/subscription',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
