@@ -505,13 +505,21 @@ const LoginForm = () => {
       <div className='flex flex-col items-center'>
         <div className='w-full max-w-md'>
           <div className='flex items-center justify-center mb-6 gap-2'>
-            <img src={logo} alt='Logo' className='h-10 rounded-full' />
+            <img src={logo} alt='Logo' className='h-10 rounded-full ring-1 ring-[var(--semi-color-border)]' />
             <Title heading={3} className='!text-gray-800'>
               {systemName}
             </Title>
           </div>
 
-          <Card className='border-0 !rounded-2xl overflow-hidden'>
+          <Card
+            className='border-0 !rounded-2xl overflow-hidden'
+            style={{
+              boxShadow:
+                '0 20px 60px -20px rgba(69,87,208,0.35), 0 0 0 1px var(--semi-color-border)',
+              background:
+                'radial-gradient(120% 100% at 50% 0%, rgba(69,87,208,0.06), transparent 60%), var(--semi-color-bg-1)',
+            }}
+          >
             <div className='flex justify-center pt-6 pb-2'>
               <Title heading={3} className='text-gray-800 dark:text-gray-200'>
                 {t('登 录')}

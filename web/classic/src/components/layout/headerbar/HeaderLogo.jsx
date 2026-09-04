@@ -44,7 +44,7 @@ const HeaderLogo = ({
         <img
           src={logo}
           alt='logo'
-          className={`absolute inset-0 w-full h-full transition-all duration-200 group-hover:scale-110 rounded-full ${!isLoading && logoLoaded ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 w-full h-full transition-all duration-200 group-hover:scale-110 rounded-full ring-1 ring-[var(--semi-color-border)] ${!isLoading && logoLoaded ? 'opacity-100' : 'opacity-0'}`}
         />
       </div>
       <div className='hidden md:flex items-center gap-2'>
@@ -58,6 +58,14 @@ const HeaderLogo = ({
             <Typography.Title
               heading={4}
               className='!text-lg !font-semibold !mb-0'
+              style={{
+                background:
+                  'linear-gradient(90deg, var(--space-primary), var(--space-accent))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                color: 'transparent',
+              }}
             >
               {systemName}
             </Typography.Title>

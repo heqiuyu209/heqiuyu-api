@@ -1,86 +1,115 @@
 @custom-variant dark (&:is(.dark *));
 
+/* ═══════════════════════════════════════════════════════════════
+   星辰浅域 Light Stellar Observatory — design tokens
+   太空靛蓝主轴 + 极光青强调 + 修道紫收尾，星雾浅底承载高密度数据
+   ═══════════════════════════════════════════════════════════════ */
+
 :root {
-  --background: oklch(0.994 0.002 247.858);
-  --foreground: oklch(0.18 0.035 264.695);
-  --card: oklch(0.997 0.002 247.858);
-  --card-foreground: oklch(0.18 0.035 264.695);
-  --popover: oklch(0.997 0.002 247.858);
-  --popover-foreground: oklch(0.18 0.035 264.695);
-  --primary: oklch(0.255 0.042 265.755);
-  --primary-foreground: oklch(0.985 0.004 247.858);
-  --secondary: oklch(0.974 0.004 247.896);
-  --secondary-foreground: oklch(0.255 0.042 265.755);
-  --muted: oklch(0.972 0.004 247.896);
-  --muted-foreground: oklch(0.49 0.04 257.417);
-  --accent: oklch(0.972 0.004 247.896);
-  --accent-foreground: oklch(0.255 0.042 265.755);
+  /* 星雾底（近白、微带天青） */
+  --background: oklch(0.976 0.005 255);
+  --foreground: oklch(0.235 0.045 265);
+  --card: oklch(0.992 0.004 255);
+  --card-foreground: oklch(0.235 0.045 265);
+  --popover: oklch(0.996 0.003 255);
+  --popover-foreground: oklch(0.235 0.045 265);
+
+  /* 太空靛蓝（主轴） */
+  --primary: oklch(0.52 0.15 268);
+  --primary-foreground: oklch(0.985 0.005 255);
+
+  --secondary: oklch(0.945 0.02 265);
+  --secondary-foreground: oklch(0.4 0.06 265);
+  --muted: oklch(0.95 0.012 260);
+  --muted-foreground: oklch(0.52 0.04 265);
+
+  /* 极光青（强调） */
+  --accent: oklch(0.72 0.11 192);
+  --accent-foreground: oklch(0.16 0.05 220);
+
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.925 0.01 255.508);
-  --input: oklch(0.925 0.01 255.508);
-  --ring: oklch(0.64 0.055 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.991 0.002 247.858);
-  --sidebar-foreground: var(--foreground);
+  --border: oklch(0.905 0.015 260);
+  --input: oklch(0.9 0.015 260);
+  --ring: oklch(0.6 0.13 268);
+
+  /* 深空图表色系 */
+  --chart-1: oklch(0.57 0.14 268); /* 靛蓝 */
+  --chart-2: oklch(0.7 0.11 192); /* 极光青 */
+  --chart-3: oklch(0.64 0.14 305); /* 紫罗兰 */
+  --chart-4: oklch(0.78 0.14 82); /* 暖金 */
+  --chart-5: oklch(0.7 0.09 352); /* 星粉 */
+
+  --radius: 0.75rem;
+
+  --sidebar: oklch(0.988 0.004 255);
+  --sidebar-foreground: oklch(0.32 0.05 265);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--accent);
-  --sidebar-accent-foreground: var(--accent-foreground);
-  --sidebar-border: var(--border);
+  --sidebar-accent: oklch(0.94 0.02 250);
+  --sidebar-accent-foreground: oklch(0.47 0.14 268);
+  --sidebar-border: oklch(0.915 0.012 260);
   --sidebar-ring: var(--ring);
-  --skeleton-base: oklch(0.948 0.004 264);
-  --skeleton-highlight: oklch(0.988 0.002 264);
+
+  --skeleton-base: oklch(0.94 0.01 260);
+  --skeleton-highlight: oklch(0.986 0.004 255);
 }
 
 .dark {
-  --background: oklch(0.165 0.012 258);
-  --foreground: oklch(0.92 0.008 247.858);
-  --card: oklch(0.205 0.012 258);
-  --card-foreground: oklch(0.92 0.008 247.858);
-  --popover: oklch(0.225 0.014 258);
-  --popover-foreground: oklch(0.92 0.008 247.858);
-  --primary: oklch(0.87 0.018 255.508);
-  --primary-foreground: oklch(0.235 0.042 265.755);
-  --secondary: oklch(0.255 0.012 258);
-  --secondary-foreground: oklch(0.92 0.008 247.858);
-  --muted: oklch(0.245 0.012 258);
-  --muted-foreground: oklch(0.68 0.014 257.417);
-  --accent: oklch(0.265 0.014 258);
-  --accent-foreground: oklch(0.92 0.008 247.858);
+  /* 深空航道 */
+  --background: oklch(0.18 0.02 265);
+  --foreground: oklch(0.92 0.012 255);
+  --card: oklch(0.21 0.017 265);
+  --card-foreground: oklch(0.92 0.012 255);
+  --popover: oklch(0.238 0.018 265);
+  --popover-foreground: oklch(0.92 0.012 255);
+
+  --primary: oklch(0.72 0.13 258);
+  --primary-foreground: oklch(0.2 0.05 265);
+
+  --secondary: oklch(0.27 0.015 265);
+  --secondary-foreground: oklch(0.9 0.01 255);
+  --muted: oklch(0.258 0.014 265);
+  --muted-foreground: oklch(0.7 0.02 258);
+
+  --accent: oklch(0.78 0.11 192);
+  --accent-foreground: oklch(0.16 0.05 220);
+
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.31 0.014 258);
-  --input: oklch(0.34 0.014 258);
-  --ring: oklch(0.58 0.025 256.788);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.185 0.012 258);
-  --sidebar-foreground: oklch(0.92 0.008 247.858);
-  --sidebar-primary: oklch(0.75 0.14 233);
-  --sidebar-primary-foreground: oklch(0.29 0.06 243);
-  --sidebar-accent: oklch(0.255 0.012 258);
-  --sidebar-accent-foreground: oklch(0.92 0.008 247.858);
-  --sidebar-border: oklch(0.3 0.014 258);
-  --sidebar-ring: oklch(0.52 0.02 256.788);
-  --skeleton-base: oklch(0.245 0.01 258);
-  --skeleton-highlight: oklch(0.32 0.014 258);
+  --border: oklch(0.32 0.014 265);
+  --input: oklch(0.36 0.016 265);
+  --ring: oklch(0.66 0.12 258);
+
+  --chart-1: oklch(0.65 0.14 268);
+  --chart-2: oklch(0.76 0.11 192);
+  --chart-3: oklch(0.7 0.14 305);
+  --chart-4: oklch(0.82 0.13 82);
+  --chart-5: oklch(0.76 0.09 352);
+
+  --sidebar: oklch(0.205 0.016 265);
+  --sidebar-foreground: oklch(0.88 0.012 258);
+  --sidebar-primary: oklch(0.72 0.13 258);
+  --sidebar-primary-foreground: oklch(0.2 0.05 265);
+  --sidebar-accent: oklch(0.27 0.02 258);
+  --sidebar-accent-foreground: oklch(0.82 0.11 198);
+  --sidebar-border: oklch(0.3 0.014 265);
+  --sidebar-ring: oklch(0.66 0.12 258);
+
+  --skeleton-base: oklch(0.245 0.012 265);
+  --skeleton-highlight: oklch(0.32 0.014 265);
 }
 
 @theme inline {
-  --font-sans: 'Public Sans', sans-serif;
-  --font-inter:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
-    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-manrope:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
-    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  /* 字体：标题 Space Grotesk / 正文 Public Sans */
+  --font-sans:
+    'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+    'Helvetica Neue', sans-serif;
+  --font-display:
+    'Space Grotesk', 'Public Sans', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+  --font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Liberation Mono', monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -121,4 +150,10 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* 双辉光阴影：副影 + 靛蓝主影 */
+  --shadow-glow:
+    0 1px 2px oklch(0 0 0 / 0.04), 0 8px 24px oklch(0 0 0 / 0.06);
+  --shadow-glow-lg:
+    0 2px 4px oklch(0 0 0 / 0.05), 0 16px 40px oklch(0 0 0 / 0.1);
 }

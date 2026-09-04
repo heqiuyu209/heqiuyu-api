@@ -1,3 +1,70 @@
+/* ==================== 星辰浅域 · semi-ui 主题变量覆盖 ==================== */
+:root {
+  /* 太空靛蓝主轴 + 极光青强调 + 修道紫收尾 */
+  --space-primary: #4557d0;
+  --space-accent: #2abfae;
+  --space-violet: #8b5cf6;
+
+  --semi-color-primary: #4557d0;
+  --semi-color-primary-hover: #3949b8;
+  --semi-color-primary-active: #2f3b98;
+  --semi-color-primary-light-default: rgba(69, 87, 208, 0.08);
+  --semi-color-primary-light-hover: rgba(69, 87, 208, 0.16);
+  --semi-color-primary-light-active: rgba(69, 87, 208, 0.24);
+  --semi-color-primary-light-global: rgba(69, 87, 208, 0.12);
+  --semi-color-inner-shadow: rgba(69, 87, 208, 0.1);
+  --semi-color-bg-0: #f9fafc;
+  --semi-color-bg-1: #ffffff;
+  --semi-color-bg-2: #f3f5fa;
+  --semi-color-bg-3: #edf0f7;
+  --semi-color-bg-4: #e6eaf4;
+  --semi-color-border: #dee4f0;
+  --semi-color-border-hover: #cdd6e8;
+  --semi-color-fill-0: #eef1f8;
+  --semi-color-fill-1: #e7ebf4;
+  --semi-color-fill-2: #dfe5f0;
+  --semi-color-fill-3: #d5dcea;
+  --semi-color-text-0: #1e2a45;
+  --semi-color-text-1: #3e4a63;
+  --semi-color-text-2: #6b7790;
+  --semi-color-text-3: #98a1b5;
+  --semi-color-success: #2abfae;
+  --semi-color-info: #4557d0;
+  --semi-color-warning: #d49b35;
+  --semi-color-danger: #d64545;
+}
+
+html.dark {
+  --space-primary: #7c8cf5;
+  --space-accent: #2ed0c0;
+  --space-violet: #a78bfa;
+
+  --semi-color-primary: #7c8cf5;
+  --semi-color-primary-hover: #8fa0fb;
+  --semi-color-primary-active: #6677e8;
+  --semi-color-primary-light-default: rgba(124, 140, 245, 0.14);
+  --semi-color-primary-light-hover: rgba(124, 140, 245, 0.22);
+  --semi-color-primary-light-active: rgba(124, 140, 245, 0.3);
+  --semi-color-primary-light-global: rgba(124, 140, 245, 0.16);
+  --semi-color-inner-shadow: rgba(124, 140, 245, 0.18);
+  --semi-color-bg-0: #161b2e;
+  --semi-color-bg-1: #1a2036;
+  --semi-color-bg-2: #1f2540;
+  --semi-color-bg-3: #242b46;
+  --semi-color-bg-4: #2a3050;
+  --semi-color-border: #2d3452;
+  --semi-color-border-hover: #3a4266;
+  --semi-color-fill-0: #222940;
+  --semi-color-fill-1: #272f49;
+  --semi-color-fill-2: #2c3450;
+  --semi-color-fill-3: #323a5c;
+  --semi-color-text-0: #e8ecf6;
+  --semi-color-text-1: #b9c1d4;
+  --semi-color-text-2: #8590a8;
+  --semi-color-text-3: #5d6780;
+  --semi-color-success: #2ed0c0;
+}
+
 /* ==================== Tailwind CSS 配置 ==================== */
 @layer tailwind-base, semi, tailwind-components, tailwind-utils;
 
@@ -29,6 +96,23 @@ body {
     sans-serif;
   color: var(--semi-color-text-0);
   background-color: var(--semi-color-bg-0);
+  background-image: radial-gradient(
+      circle at 12% 12%,
+      rgba(69, 87, 208, 0.07),
+      transparent 34%
+    ),
+    radial-gradient(circle at 88% 18%, rgba(42, 191, 174, 0.06), transparent 32%),
+    radial-gradient(circle at 75% 92%, rgba(139, 92, 246, 0.06), transparent 34%),
+    radial-gradient(
+      rgba(30, 42, 69, 0.055) 1px,
+      transparent 1px
+    );
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    22px 22px;
+  background-attachment: fixed;
 }
 
 /* 桌面端禁止 body 纵向滚动 - 防止 VChart tooltip 触发页面滚动条 */
@@ -161,9 +245,27 @@ code {
 }
 
 .sidebar-nav-item-selected {
-  background-color: rgba(var(--semi-blue-0), 0.12);
+  background: linear-gradient(
+    120deg,
+    rgba(69, 87, 208, 0.14),
+    rgba(69, 87, 208, 0.06)
+  );
   color: var(--semi-color-primary);
   font-weight: 500;
+  box-shadow:
+    inset 3px 0 0 0 var(--semi-color-primary),
+    0 1px 4px rgba(69, 87, 208, 0.18);
+}
+
+html.dark .sidebar-nav-item-selected {
+  background: linear-gradient(
+    120deg,
+    rgba(124, 140, 245, 0.2),
+    rgba(46, 208, 192, 0.08)
+  );
+  box-shadow:
+    inset 3px 0 0 0 var(--semi-color-primary),
+    0 1px 6px rgba(124, 140, 245, 0.28);
 }
 
 /* 图标容器样式 */

@@ -28,7 +28,26 @@ import { useTranslation } from 'react-i18next';
 const NotFound = () => {
   const { t } = useTranslation();
   return (
-    <div className='flex justify-center items-center h-screen p-8'>
+    <div
+      className='flex flex-col justify-center items-center h-screen p-8 relative overflow-hidden'
+      style={{
+        background:
+          'radial-gradient(ellipse 45% 40% at 20% 15%, rgba(69,87,208,0.12), transparent 70%), radial-gradient(ellipse 40% 40% at 80% 85%, rgba(42,191,174,0.1), transparent 70%)',
+      }}
+    >
+      <div
+        aria-hidden
+        className='text-[6rem] leading-none font-bold mb-2 opacity-90'
+        style={{
+          background:
+            'linear-gradient(135deg, var(--space-primary), var(--space-accent), var(--space-violet))',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}
+      >
+        404
+      </div>
       <Empty
         image={<IllustrationNotFound style={{ width: 250, height: 250 }} />}
         darkModeImage={

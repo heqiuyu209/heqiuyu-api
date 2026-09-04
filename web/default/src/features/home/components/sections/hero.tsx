@@ -34,6 +34,24 @@ export function Hero(props: HeroProps) {
         className='absolute inset-0 -z-10 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_30%,black_20%,transparent_100%)] bg-[size:4rem_4rem] opacity-[0.08]'
       />
 
+      {/* 轨道弧装饰 */}
+      <div
+        aria-hidden
+        className='pointer-events-none absolute top-6 right-[6%] hidden h-56 w-56 lg:block'
+      >
+        <div className='orbit-arc absolute inset-0' />
+        <div className='orbit-arc absolute inset-8' />
+        <div className='orbit-dot top-[18%] right-0' />
+        <div className='orbit-dot bottom-[12%] left-0' />
+      </div>
+      <div
+        aria-hidden
+        className='pointer-events-none absolute bottom-10 left-[4%] hidden h-40 w-40 md:block'
+      >
+        <div className='orbit-arc absolute inset-0' />
+        <div className='orbit-dot top-1/2 left-0' />
+      </div>
+
       <div className='flex max-w-3xl flex-col items-center text-center'>
         <h1
           className='landing-animate-fade-up text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-bold tracking-tight'
@@ -41,7 +59,7 @@ export function Hero(props: HeroProps) {
         >
           {t('Unified API Gateway for')}
           <br />
-          <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
+          <span className='bg-linear-to-r from-oklch(0.52 0.15 268) via-oklch(0.7 0.11 192) to-oklch(0.64 0.14 305) bg-clip-text text-transparent'>
             {t('All Your AI Models')}
           </span>
         </h1>
