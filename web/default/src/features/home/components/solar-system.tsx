@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -553,7 +554,7 @@ export function SolarSystem({
     setTier(detectTier())
   }, [])
 
-  const handleHover = (name: string | null) => setHovered(name)
+  const handleHover = useCallback((name: string | null) => setHovered(name), [])
 
   return (
     <div className={`relative h-full w-full overflow-hidden ${className}`}>
