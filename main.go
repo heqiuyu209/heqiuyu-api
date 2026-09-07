@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"os"
@@ -146,7 +147,7 @@ func main() {
 
 	if os.Getenv("ENABLE_PPROF") == "true" {
 		gopool.Go(func() {
-			log.Println(http.ListenAndServe("0.0.0.0:8005", nil))
+			log.Println(http.ListenAndServe("127.0.0.1:8005", nil))
 		})
 		go common.Monitor()
 		common.SysLog("pprof enabled")
@@ -176,11 +177,13 @@ func main() {
 	middleware.SetUpLogger(server)
 	// Initialize session store
 	store := cookie.NewStore([]byte(common.SessionSecret))
+	// 安全修复：默认跟随部署形态——纯 HTTP 本地部署保持 Secure=false；
+	// 生产环境（HTTPS 反代/CDN/云上）设置环境变量 COOKIE_SECURE=true 强制 Cookie 仅经 HTTPS 传输。
 	store.Options(sessions.Options{
 		Path:     "/",
 		MaxAge:   2592000, // 30 days
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   os.Getenv("COOKIE_SECURE") == "true",
 		SameSite: http.SameSiteStrictMode,
 	})
 	server.Use(sessions.Sessions("session", store))
@@ -212,11 +215,12 @@ func main() {
 func InjectUmamiAnalytics() {
 	analyticsInjectBuilder := &strings.Builder{}
 	if os.Getenv("UMAMI_WEBSITE_ID") != "" {
-		umamiSiteID := os.Getenv("UMAMI_WEBSITE_ID")
+		umamiSiteID := html.EscapeString(os.Getenv("UMAMI_WEBSITE_ID"))
 		umamiScriptURL := os.Getenv("UMAMI_SCRIPT_URL")
 		if umamiScriptURL == "" {
 			umamiScriptURL = "https://analytics.umami.is/script.js"
 		}
+		umamiScriptURL = html.EscapeString(umamiScriptURL)
 		analyticsInjectBuilder.WriteString("<script defer src=\"")
 		analyticsInjectBuilder.WriteString(umamiScriptURL)
 		analyticsInjectBuilder.WriteString("\" data-website-id=\"")
@@ -233,7 +237,7 @@ func InjectUmamiAnalytics() {
 func InjectGoogleAnalytics() {
 	analyticsInjectBuilder := &strings.Builder{}
 	if os.Getenv("GOOGLE_ANALYTICS_ID") != "" {
-		gaID := os.Getenv("GOOGLE_ANALYTICS_ID")
+		gaID := html.EscapeString(os.Getenv("GOOGLE_ANALYTICS_ID"))
 		// Google Analytics 4 (gtag.js)
 		analyticsInjectBuilder.WriteString("<script async src=\"https://www.googletagmanager.com/gtag/js?id=")
 		analyticsInjectBuilder.WriteString(gaID)

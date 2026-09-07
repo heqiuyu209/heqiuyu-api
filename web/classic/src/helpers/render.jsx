@@ -78,6 +78,7 @@ import {
   CircleUser,
   Package,
   Server,
+  Wallet,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -145,6 +146,8 @@ export function getLucideIcon(key, selected = false) {
       return <Server {...commonProps} color={iconColor} />;
     case 'setting':
       return <Settings {...commonProps} color={iconColor} />;
+    case 'recharge':
+      return <Wallet {...commonProps} color={iconColor} />;
     default:
       return <CircleUser {...commonProps} color={iconColor} />;
   }

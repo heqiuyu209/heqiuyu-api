@@ -64,7 +64,6 @@ func InitAc(dict []string) *goahocorasick.Machine {
 	m := new(goahocorasick.Machine)
 	runes := readRunes(dict)
 	if err := m.Build(runes); err != nil {
-		fmt.Println(err)
 		return nil
 	}
 	return m

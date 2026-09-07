@@ -30,7 +30,6 @@ func DecodeBase64ImageData(base64String string) (image.Config, string, string, e
 	// 将base64字符串解码为字节切片
 	decodedData, err := base64.StdEncoding.DecodeString(base64String)
 	if err != nil {
-		fmt.Println("Error: Failed to decode base64 string")
 		return image.Config{}, "", "", fmt.Errorf("failed to decode base64 string: %s", err.Error())
 	}
 

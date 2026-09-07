@@ -398,9 +398,6 @@ func ErrOptionWithStatusCode(statusCode int) HeqiuyuErrorOptions {
 
 func ErrOptionWithHideErrMsg(replaceStr string) HeqiuyuErrorOptions {
 	return func(e *HeqiuyuError) {
-		if common.DebugEnabled {
-			fmt.Printf("ErrOptionWithHideErrMsg: %s, origin error: %s", replaceStr, e.Err)
-		}
 		e.Err = errors.New(replaceStr)
 	}
 }

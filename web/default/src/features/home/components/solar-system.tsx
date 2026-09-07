@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import * as THREE from 'three'
+import { useTheme } from '@/context/theme-provider'
 import {
   OpenAI,
   Claude,
@@ -64,6 +65,40 @@ const ORBIT_TILT: Record<0 | 1 | 2, number> = {
   2: 0.13,
 }
 
+// ---------- 主题调色板 ----------
+interface SolarPalette {
+  coreParticle: string // 恒星粒子色
+  coreGlow: string // 核心辉光 rgba
+  orbitLine: number // 轨道环
+  dust: string // 星尘
+  spriteIcon: string // 行星 SVG 图标色
+  glowDot: string // 行星尾迹 / fallback 光点 rgba
+  brandText: string // 恒星中心品牌文字色
+  brandGlow: string // 恒星中心品牌文字辉光
+}
+
+const DARK_PALETTE: SolarPalette = {
+  coreParticle: '#bcd6ff',
+  coreGlow: 'rgba(120,170,255,1)',
+  orbitLine: 0x8fb3ff,
+  dust: '#aac4ff',
+  spriteIcon: '#ffffff',
+  glowDot: 'rgba(255,255,255,1)',
+  brandText: '#c2d6ff',
+  brandGlow: 'rgba(120,170,255,1)',
+}
+
+const LIGHT_PALETTE: SolarPalette = {
+  coreParticle: '#4a6bd0',
+  coreGlow: 'rgba(78,112,222,1)',
+  orbitLine: 0x4767c0,
+  dust: '#6479bd',
+  spriteIcon: '#2f3b5c',
+  glowDot: 'rgba(70,95,180,1)',
+  brandText: 'rgba(52,66,112,0.78)',
+  brandGlow: 'rgba(96,118,196,0.40)',
+}
+
 // ---------- 档位检测 ----------
 function detectTier(): Tier {
   if (typeof window === 'undefined') return 'static'
@@ -100,21 +135,80 @@ function makeGlowTexture(color: string): THREE.Texture {
   const c = document.createElement('canvas')
   c.width = c.height = 256
   const ctx = c.getContext('2d')!
-  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128)
-  g.addColorStop(0, color)
-  g.addColorStop(0.4, color.replace('1)', '0.35)'))
-  g.addColorStop(1, color.replace('1)', '0)'))
-  ctx.fillStyle = g
+  // 解析 rgba 分量后数学归零终点透明度；旧的 color.replace('1)', '0)')
+  // 对 alpha<1 的颜色（如浅色 brandGlow 'rgba(...,0.40)'）匹配不到 '1)',
+  // 导致渐变终点不透明、整个 Sprite 矩形显示为半透明色块残影。
+  const m = color.match(/rgba\((\d+)[,\s]+(\d+)[,\s]+(\d+)[,\s]*([\d.]+)?\)/)
+  const r = m ? m[1] : '120'
+  const g = m ? m[2] : '170'
+  const b = m ? m[3] : '255'
+  const base = m && m[4] !== undefined ? parseFloat(m[4]) : 1
+  const gd = ctx.createRadialGradient(128, 128, 0, 128, 128, 128)
+  gd.addColorStop(0, `rgba(${r},${g},${b},${base})`)
+  gd.addColorStop(0.4, `rgba(${r},${g},${b},${(base * 0.35).toFixed(3)})`)
+  gd.addColorStop(1, `rgba(${r},${g},${b},0)`)
+  ctx.fillStyle = gd
   ctx.fillRect(0, 0, 256, 256)
   const tex = new THREE.CanvasTexture(c)
   tex.needsUpdate = true
   return tex
 }
 
-function iconToTexture(Icon: ComponentType<Record<string, unknown>>): THREE.Texture | null {
+/**
+ * 品牌文字纹理：用 Canvas 2D 把恒星中心文字（如 "heqiuyu"）绘制为透明纹理，
+ * 供 3D Sprite 使用，从而与行星处于同一空间、实现真实凌星遮挡。
+ * 返回纹理与按目标世界高度推算的宽/高世界尺寸。
+ */
+function makeBrandTexture(
+  text: string,
+  color: string,
+  targetHeight: number,
+  dpr: number
+): { tex: THREE.CanvasTexture; worldW: number; worldH: number } {
+  const fontFamily =
+    "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+  // 先以 100px 探测文字宽高比（宽/字号）
+  const probe = document.createElement('canvas')
+  const pctx = probe.getContext('2d')!
+  pctx.font = `600 100px ${fontFamily}`
+  const aspect = Math.max(pctx.measureText(text).width / 100, 0.1)
+
+  const fontPx = 128
+  const w = Math.max(8, Math.round(aspect * fontPx * 1.12)) // 横向留 12% 边距
+  const h = Math.max(8, Math.round(fontPx * 1.42)) // 纵向留行高边距
+
+  const c = document.createElement('canvas')
+  c.width = w * dpr
+  c.height = h * dpr
+  const ctx = c.getContext('2d')!
+  ctx.scale(dpr, dpr)
+  ctx.font = `600 ${fontPx}px ${fontFamily}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = color
+  ctx.fillText(text, w / 2, h / 2)
+
+  const tex = new THREE.CanvasTexture(c)
+  // 文字贴图为非 2 次幂小尺寸 Canvas，关闭 mipmap 可避免多级下采样把
+  // 字形边缘半透明像素向外扩散成矩形残影（浅色主题下尤为明显）。
+  tex.generateMipmaps = false
+  tex.minFilter = THREE.LinearFilter
+  tex.magFilter = THREE.LinearFilter
+  tex.needsUpdate = true
+  return {
+    tex,
+    worldW: (w / h) * targetHeight,
+    worldH: targetHeight,
+  }
+}
+
+function iconToTexture(
+  Icon: ComponentType<Record<string, unknown>>,
+  color: string
+): THREE.Texture | null {
   try {
     const svg = renderToStaticMarkup(
-      <Icon width={128} height={128} color='#ffffff' /> as unknown as ReactElement
+      <Icon width={128} height={128} color={color} /> as unknown as ReactElement
     )
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -135,13 +229,16 @@ function iconToTexture(Icon: ComponentType<Record<string, unknown>>): THREE.Text
 function SolarCanvas({
   className,
   onHover,
+  brand,
 }: {
   className?: string
   onHover: (name: string | null) => void
+  brand?: string
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null)
   const tierRef = useRef<Tier>('full')
   const hoveredRef = useRef<string | null>(null)
+  const { resolvedTheme } = useTheme()
 
   useEffect(() => {
     const mount = mountRef.current
@@ -150,6 +247,8 @@ function SolarCanvas({
     const tier = detectTier()
     tierRef.current = tier
     if (tier === 'static') return
+
+    const palette = resolvedTheme === 'dark' ? DARK_PALETTE : LIGHT_PALETTE
 
     const particleScale = tier === 'lite' ? 0.5 : 1
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -194,7 +293,7 @@ function SolarCanvas({
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      color: new THREE.Color('#bcd6ff'),
+      color: new THREE.Color(palette.coreParticle),
     })
     const corePoints = new THREE.Points(coreGeo, coreMat)
     scene.add(corePoints)
@@ -202,7 +301,7 @@ function SolarCanvas({
     // 恒星核心辉光
     const coreGlow = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: makeGlowTexture('rgba(120,170,255,1)'),
+        map: makeGlowTexture(palette.coreGlow),
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
@@ -211,6 +310,44 @@ function SolarCanvas({
     )
     coreGlow.scale.set(4.6, 4.6, 1)
     scene.add(coreGlow)
+
+    // ── 恒星中心品牌文字（3D，与行星同空间 → 真实凌星遮挡） ──
+    if (brand) {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const { tex: brandTex, worldW, worldH } = makeBrandTexture(
+        brand,
+        palette.brandText,
+        0.58,
+        dpr
+      )
+      // 文字辉光（垫在文字后方弱化一层）
+      const brandGlowSprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: makeGlowTexture(palette.brandGlow),
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          opacity: 0.55,
+        })
+      )
+      brandGlowSprite.scale.set(worldW * 2.4, worldH * 2.6, 1)
+      brandGlowSprite.position.z = -0.06
+      brandGlowSprite.renderOrder = 5
+      scene.add(brandGlowSprite)
+
+      // 文字本体
+      const brandSprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: brandTex,
+          transparent: true,
+          depthWrite: false,
+          alphaTest: 0.05,
+        })
+      )
+      brandSprite.scale.set(worldW, worldH, 1)
+      brandSprite.renderOrder = 10
+      scene.add(brandSprite)
+    }
 
     // ── 轨道粒子环 + 行星 ──
     const orbitGroups: Record<0 | 1 | 2, THREE.Group> = { 0: new THREE.Group(), 1: new THREE.Group(), 2: new THREE.Group() }
@@ -236,18 +373,18 @@ function SolarCanvas({
         pts.push(Math.cos(a) * r, 0, Math.sin(a) * r)
       }
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3))
-      const mat = new THREE.LineBasicMaterial({ color: 0x8fb3ff, transparent: true, opacity: 0.22 })
+      const mat = new THREE.LineBasicMaterial({ color: palette.orbitLine, transparent: true, opacity: 0.22 })
       const ring = new THREE.LineLoop(geo, mat)
       orbitGroups[orbit].add(ring)
     })
 
     // 行星 sprite + 尾迹
-    const dot = makeGlowTexture('rgba(255,255,255,1)')
+    const dot = makeGlowTexture(palette.glowDot)
     const planetSprites: THREE.Sprite[] = []
     const planetData: { def: ProviderDef; angle: number; sprite: THREE.Sprite; group: THREE.Group }[] = []
 
     PROVIDERS.forEach((def) => {
-      const tex = iconToTexture(def.Icon)
+      const tex = iconToTexture(def.Icon, palette.spriteIcon)
       const sprite = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: tex ?? dot,
@@ -308,7 +445,7 @@ function SolarCanvas({
       opacity: 0.5,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      color: new THREE.Color('#aac4ff'),
+      color: new THREE.Color(palette.dust),
     })
     const dust = new THREE.Points(dustGeo, dustMat)
     scene.add(dust)
@@ -463,7 +600,7 @@ function SolarCanvas({
       renderer.dispose()
       mount.removeChild(renderer.domElement)
     }
-  }, [onHover])
+  }, [onHover, resolvedTheme])
 
   return <div ref={mountRef} className={className} />
 }
@@ -558,17 +695,23 @@ export function SolarSystem({
 
   return (
     <div className={`relative h-full w-full overflow-hidden ${className}`}>
-      {(tier === 'full' || tier === 'lite') && <SolarCanvas className='absolute inset-0' onHover={handleHover} />}
-      {tier === 'static' && <StaticSolar icons={iconMap} />}
+      {(tier === 'full' || tier === 'lite') && (
+        <SolarCanvas className='absolute inset-0' onHover={handleHover} brand={label} />
+      )}
+      {tier === 'static' && (
+        <>
+          <StaticSolar icons={iconMap} />
 
-      {/* 恒星中心字标 */}
-      {label && (
-        <div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center'>
-          <div className='bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklch,var(--primary)_55%,transparent)_0%,color-mix(in_oklch,var(--accent)_30%,transparent)_45%,transparent_72%)] absolute size-[min(58vw,340px)] blur-[2px]' />
-          <span className='brand-wordmark text-[clamp(1.6rem,6vw,2.8rem)] text-foreground drop-shadow-[0_0_22px_color-mix(in_oklch,var(--primary)_70%,transparent)]'>
-            {label}
-          </span>
-        </div>
+          {/* 恒星中心字标（静态档无 3D，保留 HTML 层） */}
+          {label && (
+            <div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center'>
+              <div className='bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklch,var(--primary)_55%,transparent)_0%,color-mix(in_oklch,var(--accent)_30%,transparent)_45%,transparent_72%)] absolute size-[min(58vw,340px)] blur-[2px]' />
+              <span className='brand-wordmark text-[clamp(1.6rem,6vw,2.8rem)] text-foreground drop-shadow-[0_0_22px_color-mix(in_oklch,var(--primary)_70%,transparent)]'>
+                {label}
+              </span>
+            </div>
+          )}
+        </>
       )}
 
       {/* hover 名称浮层 */}

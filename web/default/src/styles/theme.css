@@ -52,6 +52,15 @@
 
   --skeleton-base: oklch(0.94 0.01 260);
   --skeleton-highlight: oklch(0.986 0.004 255);
+
+  /* 天体系统视窗底（浅色）：星雾靛蓝，与 --background 同轴谐振 */
+  --solar-bg: radial-gradient(
+    ellipse 90% 82% at 50% 42%,
+    oklch(0.962 0.016 255) 0%,
+    oklch(0.932 0.024 258) 55%,
+    oklch(0.908 0.028 260) 82%,
+    oklch(0.945 0.018 255) 100%
+  );
 }
 
 .dark {
@@ -96,6 +105,15 @@
 
   --skeleton-base: oklch(0.245 0.012 265);
   --skeleton-highlight: oklch(0.32 0.014 265);
+
+  /* 天体系统视窗底（深色）：深空蓝黑 */
+  --solar-bg: radial-gradient(
+    ellipse 90% 82% at 50% 42%,
+    oklch(0.17 0.028 265) 0%,
+    oklch(0.115 0.02 265) 58%,
+    oklch(0.095 0.018 265) 84%,
+    oklch(0.16 0.022 265) 100%
+  );
 }
 
 @theme inline {

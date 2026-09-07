@@ -44,18 +44,20 @@ func InitHttpClient() {
 		transport.TLSClientConfig = common.InsecureTLSConfig
 	}
 
-	if common.RelayTimeout == 0 {
-		httpClient = &http.Client{
-			Transport:     transport,
-			CheckRedirect: checkRedirect,
-		}
-	} else {
-		httpClient = &http.Client{
-			Transport:     transport,
-			Timeout:       time.Duration(common.RelayTimeout) * time.Second,
-			CheckRedirect: checkRedirect,
-		}
+	httpClient = &http.Client{
+		Transport:     transport,
+		Timeout:       effectiveRelayTimeout(),
+		CheckRedirect: checkRedirect,
 	}
+}
+
+// effectiveRelayTimeout 返回实际生效的 relay 上游超时时间。
+// 当 RELAY_TIMEOUT 未配置或为 0 时，使用兜底 300 秒，避免创建无超时的 http.Client。
+func effectiveRelayTimeout() time.Duration {
+	if common.RelayTimeout <= 0 {
+		return 300 * time.Second
+	}
+	return time.Duration(common.RelayTimeout) * time.Second
 }
 
 func GetHttpClient() *http.Client {
@@ -118,7 +120,7 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 			Transport:     transport,
 			CheckRedirect: checkRedirect,
 		}
-		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
+		client.Timeout = effectiveRelayTimeout()
 		proxyClientLock.Lock()
 		proxyClients[proxyURL] = client
 		proxyClientLock.Unlock()
@@ -157,7 +159,7 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 		}
 
 		client := &http.Client{Transport: transport, CheckRedirect: checkRedirect}
-		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
+		client.Timeout = effectiveRelayTimeout()
 		proxyClientLock.Lock()
 		proxyClients[proxyURL] = client
 		proxyClientLock.Unlock()

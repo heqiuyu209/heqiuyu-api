@@ -171,6 +171,10 @@ func VideoProxy(c *gin.Context) {
 	}
 }
 
+// maxVideoProxyBytes 限制单次通过 data: URL 代理下发的视频原始字节数，
+// 防止上游投递的超大 payload 导致网关内存膨胀。
+const maxVideoProxyBytes = 100 << 20 // 100 MiB
+
 func writeVideoDataURL(c *gin.Context, dataURL string) error {
 	parts := strings.SplitN(dataURL, ",", 2)
 	if len(parts) != 2 {
@@ -189,12 +193,22 @@ func writeVideoDataURL(c *gin.Context, dataURL string) error {
 		mimeType = "video/mp4"
 	}
 
+	// 解码前先按 base64 上限长度粗筛，避免超大字符串解码耗尽内存
+	if len(payload) > base64.StdEncoding.EncodedLen(maxVideoProxyBytes) {
+		return fmt.Errorf("data url payload too large")
+	}
+
 	videoBytes, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
 		videoBytes, err = base64.RawStdEncoding.DecodeString(payload)
 		if err != nil {
 			return err
 		}
+	}
+
+	// 解码后再次校验实际字节数，覆盖 RawStdEncoding 尾部无 padding 的场景
+	if len(videoBytes) > maxVideoProxyBytes {
+		return fmt.Errorf("video payload exceeds size limit")
 	}
 
 	c.Writer.Header().Set("Content-Type", mimeType)

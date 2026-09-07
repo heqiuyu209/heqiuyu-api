@@ -1,0 +1,33 @@
+name: Frontend Type Check
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/default/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web/default
+        run: npm ci
+
+      - name: Type check
+        working-directory: web/default
+        run: npm run typecheck

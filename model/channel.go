@@ -157,10 +157,8 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.HeqiuyuError) {
 		if err != nil {
 			return "", 0, types.NewError(err, types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 		}
-		//println("before polling index:", channel.ChannelInfo.MultiKeyPollingIndex)
 		defer func() {
 			if common.DebugEnabled {
-				println(fmt.Sprintf("channel %d polling index: %d", channel.Id, channel.ChannelInfo.MultiKeyPollingIndex))
 			}
 			if !common.MemoryCacheEnabled {
 				_ = channel.SaveChannelInfo()

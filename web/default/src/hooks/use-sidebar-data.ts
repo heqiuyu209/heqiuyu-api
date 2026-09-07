@@ -10,6 +10,8 @@ import {
   Command,
   Radio,
   FlaskConical,
+  MessageSquare,
+  Coins,
 } from 'lucide-react'
 
 import { useTranslation } from 'react-i18next'
@@ -59,6 +61,11 @@ export function useSidebarData(): SidebarData {
             title: t('Dashboard'),
             icon: LayoutDashboard,
             items: getDashboardSectionNavItems(t, { isAdmin }),
+          },
+          {
+            title: t('代充'),
+            url: '/recharge',
+            icon: Coins,
           },
           {
             title: t('API Keys'),

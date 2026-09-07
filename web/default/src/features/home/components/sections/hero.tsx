@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { Button } from '@/components/ui/button'
-import { HeroTerminalDemo } from '../hero-terminal-demo'
+import { SolarSystem } from '../solar-system'
 
 interface HeroProps {
   className?: string
@@ -15,8 +15,8 @@ export function Hero(props: HeroProps) {
   const { systemName } = useSystemConfig()
 
   return (
-    <section className='relative z-10 flex flex-col items-center overflow-hidden px-6 pt-28 pb-16 md:pt-36 md:pb-24'>
-      {/* Radial gradient background */}
+    <section className='relative z-10 flex flex-col items-center overflow-hidden px-4 pt-14 pb-16 md:px-6 md:pt-16 md:pb-24'>
+      {/* 背景径向光（陪衬，微弱） */}
       <div
         aria-hidden
         className='pointer-events-none absolute inset-0 -z-10 opacity-25 dark:opacity-[0.12]'
@@ -24,58 +24,32 @@ export function Hero(props: HeroProps) {
           background: [
             'radial-gradient(ellipse 60% 50% at 20% 20%, oklch(0.72 0.18 250 / 80%) 0%, transparent 70%)',
             'radial-gradient(ellipse 50% 40% at 80% 15%, oklch(0.65 0.15 200 / 60%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 40% 35% at 40% 80%, oklch(0.70 0.12 280 / 40%) 0%, transparent 70%)',
+            'radial-gradient(ellipse 40% 35% at 50% 80%, oklch(0.70 0.12 280 / 40%) 0%, transparent 70%)',
           ].join(', '),
         }}
       />
-      {/* Grid pattern */}
-      <div
-        aria-hidden
-        className='absolute inset-0 -z-10 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_30%,black_20%,transparent_100%)] bg-[size:4rem_4rem] opacity-[0.08]'
-      />
 
-      {/* 轨道弧装饰 */}
-      <div
-        aria-hidden
-        className='pointer-events-none absolute top-6 right-[6%] hidden h-56 w-56 lg:block'
-      >
-        <div className='orbit-arc absolute inset-0' />
-        <div className='orbit-arc absolute inset-8' />
-        <div className='orbit-dot top-[18%] right-0' />
-        <div className='orbit-dot bottom-[12%] left-0' />
-      </div>
-      <div
-        aria-hidden
-        className='pointer-events-none absolute bottom-10 left-[4%] hidden h-40 w-40 md:block'
-      >
-        <div className='orbit-arc absolute inset-0' />
-        <div className='orbit-dot top-1/2 left-0' />
+      {/* 天体系统视窗（深空星窗） */}
+      <div className='relative z-10 mx-auto w-full max-w-5xl'>
+        <div
+          className='relative h-[480px] w-full overflow-hidden rounded-[2rem] border border-border/40 sm:h-[560px] md:h-[620px]'
+          style={{
+            background: 'var(--solar-bg)',
+          }}
+        >
+          <SolarSystem label='heqiuyu' />
+        </div>
       </div>
 
-      <div className='flex max-w-3xl flex-col items-center text-center'>
-        <h1
-          className='landing-animate-fade-up text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-bold tracking-tight'
-          style={{ animationDelay: '0ms' }}
-        >
-          {t('Unified API Gateway for')}
-          <br />
-          <span className='bg-linear-to-r from-oklch(0.52 0.15 268) via-oklch(0.7 0.11 192) to-oklch(0.64 0.14 305) bg-clip-text text-transparent'>
-            {t('All Your AI Models')}
-          </span>
-        </h1>
-        <p
-          className='landing-animate-fade-up text-muted-foreground/80 mt-5 max-w-lg text-base leading-relaxed opacity-0 md:text-lg'
-          style={{ animationDelay: '80ms' }}
-        >
+      {/* CTA 区：恒星下方保留入口 */}
+      <div className='landing-animate-fade-up z-10 mt-10 flex max-w-2xl flex-col items-center text-center'>
+        <p className='text-muted-foreground/80 text-base leading-relaxed md:text-lg'>
           {systemName}{' '}
           {t(
             'aggregates 50+ AI providers behind one unified API. Manage access, track costs, and scale effortlessly.'
           )}
         </p>
-        <div
-          className='landing-animate-fade-up mt-8 flex items-center gap-3 opacity-0'
-          style={{ animationDelay: '160ms' }}
-        >
+        <div className='mt-6 flex flex-wrap items-center justify-center gap-3'>
           {props.isAuthenticated ? (
             <Button className='group rounded-lg' asChild>
               <Link to='/dashboard'>
@@ -103,12 +77,10 @@ export function Hero(props: HeroProps) {
         </div>
       </div>
 
-      <div
-        className='landing-animate-fade-up w-full opacity-0'
-        style={{ animationDelay: '300ms' }}
-      >
-        <HeroTerminalDemo />
-      </div>
+      {/* 无障碍标题 */}
+      <h1 className='sr-only'>
+        heqiuyu — {t('Unified API Gateway for All Your AI Models')}
+      </h1>
     </section>
   )
 }

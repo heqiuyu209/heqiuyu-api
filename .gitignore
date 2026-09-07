@@ -35,3 +35,8 @@ data/
 .test
 token_estimator_test.go
 skills-lock.json
+
+*.log
+bin/run.pid
+*.db.bak*
+server*.log

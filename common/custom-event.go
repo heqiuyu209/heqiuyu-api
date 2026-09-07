@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 )
 
 type stringWriter interface {
@@ -48,13 +47,15 @@ var dataReplacer = strings.NewReplacer(
 	"\n", "\n",
 	"\r", "\\r")
 
+// CustomEvent 为 Server-Sent Events 的渲染载体。
+// 安全修复：移除 sync.Mutex 字段，消除“含锁结构体被按值拷贝/传递”的 go vet 告警。
+// 每个实例仅由单个请求的单个 goroutine 使用，锁本无并发价值；header 写入由各自
+// 的 http.ResponseWriter 天然隔离，去掉后行为不变。
 type CustomEvent struct {
 	Event string
 	Id    string
 	Retry uint
 	Data  interface{}
-
-	Mutex sync.Mutex
 }
 
 func encode(writer io.Writer, event CustomEvent) error {
@@ -76,8 +77,6 @@ func (r CustomEvent) Render(w http.ResponseWriter) error {
 }
 
 func (r CustomEvent) WriteContentType(w http.ResponseWriter) {
-	r.Mutex.Lock()
-	defer r.Mutex.Unlock()
 	header := w.Header()
 	header["Content-Type"] = contentType
 

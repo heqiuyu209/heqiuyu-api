@@ -15,6 +15,7 @@ import (
 	"github.com/heqiuyu/heqiuyu-api/relay/channel/claude"
 	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
 	"github.com/heqiuyu/heqiuyu-api/relay/helper"
+	"github.com/heqiuyu/heqiuyu-api/logger"
 	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/types"
 
@@ -281,10 +282,10 @@ func awsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor) (
 				return respErr, nil
 			}
 		case *bedrockruntimeTypes.UnknownUnionMember:
-			fmt.Println("unknown tag:", v.Tag)
+			logger.LogError(c, "unknown bedrock response tag: "+v.Tag)
 			return types.NewError(errors.New("unknown response type"), types.ErrorCodeInvalidRequest), nil
 		default:
-			fmt.Println("union is nil or unknown type")
+			logger.LogError(c, "union is nil or unknown type")
 			return types.NewError(errors.New("nil or unknown response type"), types.ErrorCodeInvalidRequest), nil
 		}
 	}

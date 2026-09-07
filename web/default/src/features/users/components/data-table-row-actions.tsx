@@ -7,6 +7,10 @@ import {
   Power,
   PowerOff,
   ArrowUp,
+  ArrowDown,
+  Link2,
+  KeyRound,
+  ShieldAlert,
 } from 'lucide-react'
 
 import { useTranslation } from 'react-i18next'

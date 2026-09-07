@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/logger"
 	"github.com/heqiuyu/heqiuyu-api/pkg/ionet"
 	"github.com/gin-gonic/gin"
 )
@@ -87,15 +88,17 @@ func TestIoNetConnection(c *gin.Context) {
 	client := ionet.NewEnterpriseClient(apiKey)
 	result, err := client.GetMaxGPUsPerContainer()
 	if err != nil {
+		// 错误详情仅写日志，接口仅返回通用错误提示，避免透传第三方 io.net 平台错误细节
 		if apiErr, ok := err.(*ionet.APIError); ok {
-			message := strings.TrimSpace(apiErr.Message)
-			if message == "" {
-				message = "failed to validate api key"
+			detail := strings.TrimSpace(apiErr.Message)
+			if detail == "" {
+				detail = err.Error()
 			}
-			common.ApiErrorMsg(c, message)
-			return
+			logger.LogError(c.Request.Context(), fmt.Sprintf("io.net api key validation failed: %s", detail))
+		} else {
+			logger.LogError(c.Request.Context(), fmt.Sprintf("io.net api key validation failed: %s", err.Error()))
 		}
-		common.ApiError(c, err)
+		common.ApiErrorMsg(c, "failed to validate api key")
 		return
 	}
 

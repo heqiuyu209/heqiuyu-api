@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	common2 "github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/logger"
 	"github.com/heqiuyu/heqiuyu-api/relay/common"
 	"github.com/heqiuyu/heqiuyu-api/relay/constant"
@@ -292,9 +291,6 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	if err != nil {
 		return nil, fmt.Errorf("get request url failed: %w", err)
 	}
-	if common2.DebugEnabled {
-		println("fullRequestURL:", fullRequestURL)
-	}
 	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
@@ -322,9 +318,6 @@ func DoFormRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBod
 	fullRequestURL, err := a.GetRequestURL(info)
 	if err != nil {
 		return nil, fmt.Errorf("get request url failed: %w", err)
-	}
-	if common2.DebugEnabled {
-		println("fullRequestURL:", fullRequestURL)
 	}
 	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
@@ -388,12 +381,6 @@ func startPingKeepAlive(c *gin.Context, pingInterval time.Duration) context.Canc
 		defer func() {
 			// 增加panic恢复处理
 			if r := recover(); r != nil {
-				if common2.DebugEnabled {
-					println("SSE ping goroutine panic recovered:", fmt.Sprintf("%v", r))
-				}
-			}
-			if common2.DebugEnabled {
-				println("SSE ping goroutine stopped.")
 			}
 		}()
 
@@ -405,15 +392,9 @@ func startPingKeepAlive(c *gin.Context, pingInterval time.Duration) context.Canc
 		// 确保在任何情况下都清理ticker
 		defer func() {
 			ticker.Stop()
-			if common2.DebugEnabled {
-				println("SSE ping ticker stopped")
-			}
 		}()
 
 		var pingMutex sync.Mutex
-		if common2.DebugEnabled {
-			println("SSE ping goroutine started")
-		}
 
 		// 增加超时控制，防止goroutine长时间运行
 		maxPingDuration := 120 * time.Minute // 最大ping持续时间
@@ -425,9 +406,6 @@ func startPingKeepAlive(c *gin.Context, pingInterval time.Duration) context.Canc
 			// 发送 ping 数据
 			case <-ticker.C:
 				if err := sendPingData(c, &pingMutex); err != nil {
-					if common2.DebugEnabled {
-						println("SSE ping error, stopping goroutine:", err.Error())
-					}
 					return
 				}
 			// 收到退出信号
@@ -438,9 +416,6 @@ func startPingKeepAlive(c *gin.Context, pingInterval time.Duration) context.Canc
 				return
 			// 超时保护，防止goroutine无限运行
 			case <-pingTimeout.C:
-				if common2.DebugEnabled {
-					println("SSE ping goroutine timeout, stopping")
-				}
 				return
 			}
 		}
@@ -463,9 +438,6 @@ func sendPingData(c *gin.Context, mutex *sync.Mutex) error {
 			return
 		}
 
-		if common2.DebugEnabled {
-			println("SSE ping data sent.")
-		}
 		done <- nil
 	}()
 
@@ -507,9 +479,6 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 			defer func() {
 				if stopPinger != nil {
 					stopPinger()
-					if common2.DebugEnabled {
-						println("SSE ping goroutine stopped by defer")
-					}
 				}
 			}()
 		}

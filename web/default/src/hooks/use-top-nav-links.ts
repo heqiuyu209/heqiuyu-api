@@ -50,9 +50,6 @@ export function useTopNavLinks(): TopNavLink[] {
     }
   }, [status?.HeaderNavModules])
 
-  // Documentation link (may be external)
-  const docsLink: string | undefined = status?.docs_link as string | undefined
-
   const isAuthed = !!auth?.user
 
   const links: TopNavLink[] = []
@@ -74,13 +71,9 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Pricing'), href: '/pricing', disabled })
   }
 
-  // Docs (supports external links)
+  // Docs -> 站内使用指南页（固定 /docs，不再读取 docs_link 外部链接）
   if (modules?.docs !== false) {
-    if (docsLink) {
-      links.push({ title: t('Docs'), href: docsLink, external: true })
-    } else {
-      links.push({ title: t('Docs'), href: '/docs' })
-    }
+    links.push({ title: t('Docs'), href: '/docs' })
   }
 
   // About

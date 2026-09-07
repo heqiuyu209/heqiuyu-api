@@ -49,7 +49,8 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   const isNewYear = currentDate.getMonth() === 0 && currentDate.getDate() === 1;
 
   const isSelfUseMode = statusState?.status?.self_use_mode_enabled || false;
-  const docsLink = statusState?.status?.docs_link || '';
+  // 文档入口已站内化（/docs），docsLink 固定为空，不再从后端读取外部文档链接
+  const docsLink = '';
   const isDemoSiteMode = statusState?.status?.demo_site_enabled || false;
 
   // 获取顶栏模块配置
