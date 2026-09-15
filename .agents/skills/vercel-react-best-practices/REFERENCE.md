@@ -1,3 +1,16 @@
+<!--
+  NOTE: This file is intentionally NOT named AGENTS.md.
+
+  Agent tooling auto-injects any file named AGENTS.md into every session's
+  instruction budget. At ~80 KB this file consumed nearly the entire 64 KB
+  budget and was silently truncated, while containing only generic Vercel /
+  Next.js guidance that does not match this project (Rsbuild + TanStack Router,
+  no `next` dependency).
+
+  It is kept as an on-demand reference only. Read it explicitly when relevant.
+  Do NOT rename it back to AGENTS.md.
+-->
+
 # React Best Practices
 
 **Version 1.0.0**  
