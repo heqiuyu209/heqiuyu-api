@@ -738,14 +738,7 @@ const SystemSetting = () => {
                     style={{ marginBottom: 20, marginTop: 16 }}
                   />
                   <Text>
-                    {t('仅支持')}{' '}
-                    <a
-                      href='https://github.com/Calcium-Ion/new-api-worker'
-                      target='_blank'
-                      rel='noreferrer'
-                    >
-                      heqiuyu-api-worker
-                    </a>{' '}
+                    {t('仅支持')} heqiuyu-api-worker{' '}
                     {t('或其兼容heqiuyu-api-worker格式的其他版本')}
                   </Text>
                   <Row

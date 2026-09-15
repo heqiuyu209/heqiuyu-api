@@ -5,6 +5,11 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# GHCR tag ownership (do not overlap with docker-build.yml):
+#   this workflow (push to main)     -> :edge          (rolling development image)
+#   docker-build.yml (push a tag)    -> :<tag> and :latest
+# `latest` is deliberately NOT published here, so a main push and a tag build
+# can never race for the same tag.
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -35,6 +40,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:edge
           cache-from: type=gha
           cache-to: type=gha,mode=max

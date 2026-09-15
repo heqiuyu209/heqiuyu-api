@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
       - name: Determine Version
         run: |
-          VERSION=$(git describe --tags)
+          VERSION=$(git describe --tags 2>/dev/null || cat VERSION)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -52,12 +52,12 @@ jobs:
       - name: Build Backend (amd64)
         run: |
           go mod download
-          go build -ldflags "-s -w -X 'heqiuyu-api/common.Version=$VERSION' -extldflags '-static'" -o heqiuyu-api-$VERSION
+          go build -ldflags "-s -w -X 'github.com/heqiuyu/heqiuyu-api/common.Version=$VERSION' -extldflags '-static'" -o heqiuyu-api-$VERSION
       - name: Build Backend (arm64)
         run: |
           sudo apt-get update
           DEBIAN_FRONTEND=noninteractive sudo apt-get install -y gcc-aarch64-linux-gnu
-          CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X 'heqiuyu-api/common.Version=$VERSION' -extldflags '-static'" -o heqiuyu-api-arm64-$VERSION
+          CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X 'github.com/heqiuyu/heqiuyu-api/common.Version=$VERSION' -extldflags '-static'" -o heqiuyu-api-arm64-$VERSION
       - name: Generate checksums
         run: sha256sum heqiuyu-api-* > checksums-linux.txt
 
@@ -81,7 +81,7 @@ jobs:
           fetch-depth: 0
       - name: Determine Version
         run: |
-          VERSION=$(git describe --tags)
+          VERSION=$(git describe --tags 2>/dev/null || cat VERSION)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -110,7 +110,7 @@ jobs:
       - name: Build Backend
         run: |
           go mod download
-          go build -ldflags "-X 'heqiuyu-api/common.Version=$VERSION'" -o heqiuyu-api-macos-$VERSION
+          go build -ldflags "-X 'github.com/heqiuyu/heqiuyu-api/common.Version=$VERSION'" -o heqiuyu-api-macos-$VERSION
       - name: Generate checksums
         run: shasum -a 256 heqiuyu-api-macos-* > checksums-macos.txt
 
@@ -137,7 +137,7 @@ jobs:
           fetch-depth: 0
       - name: Determine Version
         run: |
-          VERSION=$(git describe --tags)
+          VERSION=$(git describe --tags 2>/dev/null || cat VERSION)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -165,7 +165,7 @@ jobs:
       - name: Build Backend
         run: |
           go mod download
-          go build -ldflags "-s -w -X 'heqiuyu-api/common.Version=$VERSION'" -o heqiuyu-api-$VERSION.exe
+          go build -ldflags "-s -w -X 'github.com/heqiuyu/heqiuyu-api/common.Version=$VERSION'" -o heqiuyu-api-$VERSION.exe
       - name: Generate checksums
         run: sha256sum heqiuyu-api-*.exe > checksums-windows.txt
 

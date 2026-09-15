@@ -1,16 +1,40 @@
 # File path: /etc/systemd/system/heqiuyu-api.service
-# sudo systemctl daemon-reload
-# sudo systemctl start heqiuyu-api
-# sudo systemctl enable heqiuyu-api
-# sudo systemctl status heqiuyu-api
+#
+# 安装步骤：
+#   1. 先按实际情况修改下方标记为「必改」的三处配置（路径三处必须一致）
+#   2. sudo cp heqiuyu-api.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl start heqiuyu-api
+#   5. sudo systemctl enable heqiuyu-api
+#   6. sudo systemctl status heqiuyu-api
+#
+# 可执行文件构建示例：go build -o heqiuyu-api（或使用仓库根目录的 Dockerfile）
+#
+# 必改项（三处必须指向同一个安装目录）：
+#   User=              运行服务的系统用户，需对安装目录有读写权限
+#   WorkingDirectory=  程序安装目录
+#   ExecStart=         可执行文件完整路径；--log-dir 指向该安装目录下的 logs
+#
+# 示例：安装目录 /opt/heqiuyu-api，运行用户 heqiuyu
+#   User=heqiuyu
+#   WorkingDirectory=/opt/heqiuyu-api
+#   ExecStart=/opt/heqiuyu-api/heqiuyu-api --port 3000 --log-dir /opt/heqiuyu-api/logs
+#
+# 注意：systemd 只把「整行以 # 或 ; 开头」的行视为注释，
+#       请勿在同一行配置的末尾写注释，否则注释会被当成配置值的一部分。
+#       修改后需执行：sudo systemctl daemon-reload && sudo systemctl restart heqiuyu-api
+
 [Unit]
 Description=heqiuyu Service
 After=network.target
 
 [Service]
-User=ubuntu  # 注意修改用户名
-WorkingDirectory=/path/to/heqiuyu-api  # 注意修改路径
-ExecStart=/path/to/heqiuyu-api/heqiuyu-api --port 3000 --log-dir /path/to/heqiuyu-api/logs  # 注意修改路径和端口号
+# 必改 / REQUIRED：运行服务的系统用户（示例值 ubuntu 适用于 Ubuntu 云主机，请按实际用户修改）
+User=ubuntu
+# 必改 / REQUIRED：程序安装目录（示例值 /opt/heqiuyu-api，须与下方 ExecStart 一致）
+WorkingDirectory=/opt/heqiuyu-api
+# 必改 / REQUIRED：可执行文件必须位于 WorkingDirectory 内；--port 默认 3000；--log-dir 须为 WorkingDirectory 下的 logs
+ExecStart=/opt/heqiuyu-api/heqiuyu-api --port 3000 --log-dir /opt/heqiuyu-api/logs
 Restart=always
 RestartSec=5
 

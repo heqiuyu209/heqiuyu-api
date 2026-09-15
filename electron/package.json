@@ -18,10 +18,10 @@
     "openai",
     "claude"
   ],
-  "author": "QuantumNous",
+  "author": "heqiuyu",
   "repository": {
     "type": "git",
-    "url": "https://github.com/QuantumNous/new-api"
+    "url": "https://github.com/heqiuyu209/heqiuyu-api"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
@@ -61,7 +61,7 @@
           "to": "bin/heqiuyu-api"
         },
         {
-          "from": "../web/dist",
+          "from": "../web/default/dist",
           "to": "web/dist"
         }
       ]

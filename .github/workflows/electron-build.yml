@@ -34,39 +34,56 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Single source of truth for the repo's Node version (also used for the
+          # web/default rsbuild build below). Do not pin a divergent version here.
+          node-version-file: web/default/.node-version
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '>=1.25.1'
 
-      - name: Build frontend
+      - name: Resolve version
+        id: version
+        run: |
+          VERSION=$(git describe --tags 2>/dev/null || cat VERSION)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Resolved version: $VERSION"
+
+      - name: Build Frontend (default)
         env:
           CI: ""
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
-          cd web
+          cd web/default
           bun install
-          DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(git describe --tags) bun run build
-          cd ..
+          DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$VERSION bun run build
+          cd ../..
+
+      - name: Build Frontend (classic)
+        env:
+          CI: ""
+        run: |
+          cd web/classic
+          bun install
+          VITE_REACT_APP_VERSION=$VERSION bun run build
+          cd ../..
 
       # - name: Build Go binary (macos/Linux)
       #   if: runner.os != 'Windows'
       #   run: |
       #     go mod download
-      #     go build -ldflags "-s -w -X 'heqiuyu-api/common.Version=$(git describe --tags)' -extldflags '-static'" -o heqiuyu-api
+      #     go build -ldflags "-s -w -X 'github.com/heqiuyu/heqiuyu-api/common.Version=$VERSION' -extldflags '-static'" -o heqiuyu-api
 
       - name: Build Go binary (Windows)
         if: runner.os == 'Windows'
         run: |
           go mod download
-          go build -ldflags "-s -w -X 'heqiuyu-api/common.Version=$(git describe --tags)'" -o heqiuyu-api.exe
+          go build -ldflags "-s -w -X 'github.com/heqiuyu/heqiuyu-api/common.Version=$VERSION'" -o heqiuyu-api.exe
 
       - name: Update Electron version
         run: |
           cd electron
-          VERSION=$(git describe --tags)
           VERSION=${VERSION#v}  # Remove 'v' prefix if present
           # Convert to valid semver: take first 3 components and convert rest to prerelease format
           # e.g., 0.9.3-patch.1 -> 0.9.3-patch.1

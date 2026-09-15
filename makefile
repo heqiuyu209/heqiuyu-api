@@ -8,11 +8,11 @@ all: build-all-frontends start-backend
 
 build-frontend:
 	@echo "Building default frontend..."
-	@cd $(FRONTEND_DIR) && bun install && DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat ../../VERSION) bun run build
+	@cd $(FRONTEND_DIR) && bun install && DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$$(cat ../../VERSION) bun run build
 
 build-frontend-classic:
 	@echo "Building classic frontend..."
-	@cd $(FRONTEND_CLASSIC_DIR) && bun install && VITE_REACT_APP_VERSION=$(cat ../../VERSION) bun run build
+	@cd $(FRONTEND_CLASSIC_DIR) && bun install && VITE_REACT_APP_VERSION=$$(cat ../../VERSION) bun run build
 
 build-all-frontends: build-frontend build-frontend-classic
 
