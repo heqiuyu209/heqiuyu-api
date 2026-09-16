@@ -2,14 +2,18 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"html"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
@@ -20,7 +24,9 @@ import (
 	"github.com/heqiuyu/heqiuyu-api/middleware"
 	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/heqiuyu/heqiuyu-api/oauth"
-	"github.com/heqiuyu/heqiuyu-api/relay"
+	// 空白导入确保 relay 包（及其子包）被链接进来：它在 init 中把任务轮询适配器
+	// 注册到 pkg/taskadaptor，service 侧的轮询依赖这次注册。
+	_ "github.com/heqiuyu/heqiuyu-api/relay"
 	"github.com/heqiuyu/heqiuyu-api/router"
 	"github.com/heqiuyu/heqiuyu-api/service"
 	_ "github.com/heqiuyu/heqiuyu-api/setting/performance_setting"
@@ -119,14 +125,8 @@ func main() {
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()
 
-	// Wire task polling adaptor factory (breaks service -> relay import cycle)
-	service.GetTaskAdaptorFunc = func(platform constant.TaskPlatform) service.TaskPollingAdaptor {
-		a := relay.GetTaskAdaptor(platform)
-		if a == nil {
-			return nil
-		}
-		return a
-	}
+	// 任务轮询适配器由 relay 包在 init 中自注册到 pkg/taskadaptor，
+	// 不再需要在此处注入全局函数变量。
 
 	// Channel upstream model update check task
 	controller.StartChannelUpstreamModelUpdateTask()
@@ -174,7 +174,12 @@ func main() {
 	server.Use(middleware.RequestId())
 	server.Use(middleware.PoweredBy())
 	server.Use(middleware.I18n())
+	// 请求体上限必须在此处（任何路由注册之前）挂载：Gin 在注册路由时固定中间件链，
+	// 若放在某个分组里，更早注册的 /api 分组就完全没有限制（审计报告 H5）。
+	server.Use(middleware.BodyLimit())
 	middleware.SetUpLogger(server)
+	// 可信代理必须在处理任何请求前配置好，否则限流与 IP 白名单形同虚设（审计报告 H8）。
+	configureTrustedProxies(server)
 	// Initialize session store
 	store := cookie.NewStore([]byte(common.SessionSecret))
 	// 安全修复：默认跟随部署形态——纯 HTTP 本地部署保持 Secure=false；
@@ -206,10 +211,78 @@ func main() {
 	// Log startup success message
 	common.LogStartupSuccess(startTime, port)
 
-	err = server.Run(":" + port)
-	if err != nil {
-		common.FatalLog("failed to start HTTP server: " + err.Error())
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: server,
+		// ReadTimeout / WriteTimeout 刻意保持为 0：SSE 与长流式 LLM 响应会被它们打断，
+		// 而 ReadHeaderTimeout 已足以防御 Slowloris 的"慢发请求头"变种（审计报告 M13）。
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			common.FatalLog("failed to start HTTP server: " + err.Error())
+		}
+	}()
+
+	// 优雅停机：收到信号后停止接受新连接，并等待在途请求（含流式响应）完成。
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	common.SysLog("shutting down HTTP server, waiting for in-flight requests ...")
+
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelShutdown()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		common.SysLog("HTTP server forced to shutdown: " + err.Error())
+	}
+	common.SysLog("HTTP server exited")
+}
+
+// configureTrustedProxies 依据 TRUSTED_PROXIES 环境变量配置可信代理范围。
+//
+// 安全默认：未设置时只信任 socket 对端地址，即完全忽略 X-Forwarded-For / X-Real-IP。
+// Gin v1.9.1 默认信任**所有**来源（trustedProxies = 0.0.0.0/0 与 ::/0），于是
+// c.ClientIP() 会返回客户端自报的头部值，导致所有按 IP 的限流、令牌 IP 白名单
+// 以及日志中的来源 IP 全部可被伪造（审计报告 H8）。
+func configureTrustedProxies(server *gin.Engine) {
+	raw := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES"))
+
+	if raw == "" {
+		if err := server.SetTrustedProxies(nil); err != nil {
+			common.FatalLog("failed to disable trusted proxies: " + err.Error())
+		}
+		common.SysLog("TRUSTED_PROXIES is not set: X-Forwarded-For / X-Real-IP are ignored and the client IP is the socket peer address. Set TRUSTED_PROXIES when running behind a reverse proxy or CDN.")
+		return
+	}
+
+	if raw == "*" {
+		common.SysLog("WARNING: TRUSTED_PROXIES=* trusts every proxy, so any client can spoof X-Forwarded-For and bypass IP based rate limits and token IP allow-lists. Use an explicit CIDR list in production.")
+		// 保持 Gin 默认（信任全部），仅告警，便于有意的特殊部署。
+		return
+	}
+
+	items := strings.Split(raw, ",")
+	proxies := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			proxies = append(proxies, item)
+		}
+	}
+	if len(proxies) == 0 {
+		if err := server.SetTrustedProxies(nil); err != nil {
+			common.FatalLog("failed to disable trusted proxies: " + err.Error())
+		}
+		common.SysLog("TRUSTED_PROXIES contained no usable entry: forwarding headers are ignored.")
+		return
+	}
+	if err := server.SetTrustedProxies(proxies); err != nil {
+		common.FatalLog("invalid TRUSTED_PROXIES value (expect comma separated IPs or CIDRs): " + err.Error())
+	}
+	common.SysLog("trusted proxies configured: " + strings.Join(proxies, ", "))
 }
 
 func InjectUmamiAnalytics() {
@@ -288,6 +361,9 @@ func InitResources() error {
 	}
 
 	model.CheckSetup()
+
+	// 巡检历史遗留的 GitHub 绑定（用用户名而非数字 ID），仅告警不自动修改。
+	model.WarnLegacyOAuthIDs()
 
 	// Initialize options, should after model.InitDB()
 	model.InitOptionMap()

@@ -12,12 +12,32 @@ import (
 	"github.com/samber/lo"
 )
 
+const (
+	// secretMask 替换被识别出的凭据尾部。
+	secretMask = "********"
+	// skKeyPrefix 是 OpenAI / Anthropic / DeepSeek 等厂商密钥的公共前缀。
+	skKeyPrefix = "sk-"
+	// maxSkKeyHeadLen 限制 sk- 密钥尾部保留的可读字符数，便于定位是哪个 key 但不足以复用。
+	maxSkKeyHeadLen = 4
+)
+
 var (
 	maskURLPattern    = regexp.MustCompile(`(http|https)://[^\s/$.?#].[^\s]*`)
 	maskDomainPattern = regexp.MustCompile(`\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b`)
 	maskIPPattern     = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	// maskApiKeyPattern matches patterns like 'api_key:xxx' or "api_key:xxx" to mask the API key value
 	maskApiKeyPattern = regexp.MustCompile(`(['"]?)api_key:([^\s'"]+)(['"]?)`)
+	// maskBearerPattern matches long "Bearer <token>" occurrences and keeps the scheme word.
+	maskBearerPattern = regexp.MustCompile(`(?i)\b(bearer)(\s+)([A-Za-z0-9._~+/=-]{10,})`)
+	// maskSkKeyPattern matches OpenAI / Anthropic / DeepSeek style keys,
+	// including the sk-ant-, sk-proj- and sk-or- variants.
+	maskSkKeyPattern = regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{4,}`)
+	// maskGoogleKeyPattern matches Google API keys: "AIza" followed by 35 characters.
+	maskGoogleKeyPattern = regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`)
+	// maskAwsKeyPattern matches AWS access key IDs: "AKIA" followed by 16 uppercase alphanumerics.
+	maskAwsKeyPattern = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
+	// maskGitHubTokenPattern matches GitHub tokens (personal, OAuth, app and fine-grained PATs).
+	maskGitHubTokenPattern = regexp.MustCompile(`\b(github_pat_|ghp_|gho_|ghu_|ghs_|ghr_)[A-Za-z0-9_]{10,}\b`)
 )
 
 func GetStringIfEmpty(str string, defaultValue string) string {
@@ -176,16 +196,40 @@ func maskHostForPlainDomain(domain string) string {
 	return stars + "." + strings.Join(tail, ".")
 }
 
-// MaskSensitiveInfo masks sensitive information like URLs, IPs, and domain names in a string
+// maskKeyHead returns at most maxKeep leading alphanumeric characters of a key body.
+// A non-alphanumeric separator (such as the '-' in sk-ant-...) terminates the kept head,
+// so the vendor segment of a key stays identifiable (sk-ant, sk-proj, sk-or, ...).
+func maskKeyHead(body string, maxKeep int) string {
+	end := 0
+	for end < len(body) && end < maxKeep {
+		c := body[end]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			end++
+			continue
+		}
+		break
+	}
+	return body[:end]
+}
+
+// MaskSensitiveInfo masks sensitive information like URLs, IPs, domain names and API keys in a string
 // Example:
 // http://example.com -> http://***.com
-// https://api.test.org/v1/users/123?key=secret -> https://***.org/***/***/?key=***
-// https://sub.domain.co.uk/path/to/resource -> https://***.co.uk/***/***
+// https://api.test.org/v1/users/123?key=secret -> https://***.org/***/***/***?key=***
+// https://sub.domain.co.uk/path/to/resource -> https://***.co.uk/***/***/***
 // 192.168.1.1 -> ***.***.***.***
 // openai.com -> ***.com
 // www.openai.com -> ***.***.com
 // api.openai.com -> ***.***.com
+// sk-abcd1234efgh -> sk-abcd********
+// AIzaSyAAAaUooTUni8AdaOkSRMda30n_Q4vrV70 -> AIza********
+// AKIAIOSFODNN7EXAMPLE -> AKIA********
+// Authorization: Bearer ghp_abcdefghijklmnopqrst -> Authorization: Bearer ********
 func MaskSensitiveInfo(str string) string {
+	// Mask provider tokens echoed in free text.
+	// Bearer 先于域名脱敏执行：带点号的 token（如 JWT）若先被域名规则切碎，就无法再整体识别。
+	str = maskBearerPattern.ReplaceAllString(str, "${1}${2}"+secretMask)
+
 	// Mask URLs
 	str = maskURLPattern.ReplaceAllStringFunc(str, func(urlStr string) string {
 		u, err := url.Parse(urlStr)
@@ -249,6 +293,14 @@ func MaskSensitiveInfo(str string) string {
 
 	// Mask API keys (e.g., "api_key:AIzaSyAAAaUooTUni8AdaOkSRMda30n_Q4vrV70" -> "api_key:***")
 	str = maskApiKeyPattern.ReplaceAllString(str, "${1}api_key:***${3}")
+
+	// Mask provider API keys that are not preceded by the "api_key:" prefix.
+	str = maskSkKeyPattern.ReplaceAllStringFunc(str, func(token string) string {
+		return skKeyPrefix + maskKeyHead(token[len(skKeyPrefix):], maxSkKeyHeadLen) + secretMask
+	})
+	str = maskGoogleKeyPattern.ReplaceAllString(str, "AIza"+secretMask)
+	str = maskAwsKeyPattern.ReplaceAllString(str, "AKIA"+secretMask)
+	str = maskGitHubTokenPattern.ReplaceAllString(str, "${1}"+secretMask)
 
 	return str
 }

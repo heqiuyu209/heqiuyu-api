@@ -334,7 +334,7 @@ func PasskeyLoginFinish(c *gin.Context) {
 		return
 	}
 
-	setupLogin(modelUser, c)
+	beginLogin(c, modelUser)
 	return
 }
 

@@ -119,7 +119,7 @@ func WeChatAuth(c *gin.Context) {
 		})
 		return
 	}
-	setupLogin(&user, c)
+	beginLogin(c, &user)
 }
 
 type wechatBindRequest struct {
@@ -169,7 +169,7 @@ func WeChatBind(c *gin.Context) {
 		return
 	}
 	user.WeChatId = wechatId
-	err = user.Update(false)
+	err = user.UpdateOAuthBindings()
 	if err != nil {
 		common.ApiError(c, err)
 		return

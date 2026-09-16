@@ -63,6 +63,7 @@ func (user *User) ToBaseUser() *UserBase {
 		Username: user.Username,
 		Setting:  user.Setting,
 		Email:    user.Email,
+		Role:     user.Role,
 	}
 	return cache
 }
@@ -190,7 +191,54 @@ func GetMaxUserId() int {
 	return user.Id
 }
 
-func GetAllUsers(pageInfo *common.PageInfo) (users []*User, total int64, err error) {
+// WarnLegacyOAuthIDs 巡检历史遗留的 GitHub 绑定记录并告警。
+//
+// 早期版本把 GitHub 用户名（login）而不是数字 ID 写进 github_id。由于用户名可被
+// 改名且旧名会被释放供他人抢注，现在不再依据它自动匹配账号（见 controller/oauth.go，
+// 审计报告 H7），因此这些记录需要用户在登录后重新绑定才能恢复 GitHub 登录。
+// 只告警、不自动改动数据。
+func WarnLegacyOAuthIDs() {
+	var rows []User
+	if err := DB.Unscoped().
+		Select("id, username, github_id").
+		Where("github_id IS NOT NULL AND github_id != ''").
+		Find(&rows).Error; err != nil {
+		common.SysLog("failed to scan legacy github_id records: " + err.Error())
+		return
+	}
+	legacyIds := make([]int, 0)
+	for _, row := range rows {
+		if _, err := strconv.ParseInt(strings.TrimSpace(row.GitHubId), 10, 64); err != nil {
+			legacyIds = append(legacyIds, row.Id)
+		}
+	}
+	if len(legacyIds) == 0 {
+		return
+	}
+	common.SysError(fmt.Sprintf(
+		"WARNING: %d user(s) have a non-numeric github_id (legacy login-based binding). They are no longer matched automatically and must re-bind GitHub after logging in. user ids: %v",
+		len(legacyIds), legacyIds))
+}
+
+// userListColumns 是用户列表/搜索接口允许返回的列。
+// 刻意不含 password 与 access_token：
+//   - password 是口令哈希；
+//   - access_token 是等同于该用户身份的凭据（可绕过会话直接调用管理接口），
+//     一旦随列表返回，任意管理员即可读取 root 的 access_token 并提权到 root
+//     （审计报告 H2）。需要完整行的场景请使用 GetUserById(id, true)。
+const userListColumns = "id, username, display_name, role, status, email, quota, used_quota, request_count, " +
+	"group, aff_code, aff_count, aff_quota, aff_history, inviter_id, remark, created_at, last_login_at"
+
+// applyRoleScope 按调用者角色限制可见用户：非 root 只能看到比自己级别低的用户，
+// 与单用户接口 controller.GetUser 的层级校验保持一致。
+func applyRoleScope(query *gorm.DB, callerRole int) *gorm.DB {
+	if callerRole == common.RoleRootUser {
+		return query
+	}
+	return query.Where("role < ?", callerRole)
+}
+
+func GetAllUsers(pageInfo *common.PageInfo, callerRole int) (users []*User, total int64, err error) {
 	// Start transaction
 	tx := DB.Begin()
 	if tx.Error != nil {
@@ -203,14 +251,16 @@ func GetAllUsers(pageInfo *common.PageInfo) (users []*User, total int64, err err
 	}()
 
 	// Get total count within transaction
-	err = tx.Unscoped().Model(&User{}).Count(&total).Error
+	err = applyRoleScope(tx.Unscoped().Model(&User{}), callerRole).Count(&total).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
 	}
 
 	// Get paginated users within same transaction
-	err = tx.Unscoped().Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password").Find(&users).Error
+	err = applyRoleScope(tx.Unscoped(), callerRole).
+		Select(userListColumns).
+		Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&users).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
@@ -224,7 +274,7 @@ func GetAllUsers(pageInfo *common.PageInfo) (users []*User, total int64, err err
 	return users, total, nil
 }
 
-func SearchUsers(keyword string, group string, startIdx int, num int) ([]*User, int64, error) {
+func SearchUsers(keyword string, group string, startIdx int, num int, callerRole int) ([]*User, int64, error) {
 	var users []*User
 	var total int64
 	var err error
@@ -240,8 +290,8 @@ func SearchUsers(keyword string, group string, startIdx int, num int) ([]*User, 
 		}
 	}()
 
-	// 构建基础查询
-	query := tx.Unscoped().Model(&User{})
+	// 构建基础查询（按调用者角色限制可见范围）
+	query := applyRoleScope(tx.Unscoped().Model(&User{}), callerRole)
 
 	// 构建搜索条件
 	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ?"
@@ -277,7 +327,7 @@ func SearchUsers(keyword string, group string, startIdx int, num int) ([]*User, 
 	}
 
 	// 获取分页数据
-	err = query.Omit("password").Order("id desc").Limit(num).Offset(startIdx).Find(&users).Error
+	err = query.Select(userListColumns).Order("id desc").Limit(num).Offset(startIdx).Find(&users).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
@@ -291,6 +341,11 @@ func SearchUsers(keyword string, group string, startIdx int, num int) ([]*User, 
 	return users, total, nil
 }
 
+// GetUserById 按 ID 读取用户。
+//
+// selectAll=false（对外返回的场景）会同时排除 password 与 access_token：
+// access_token 是等同于该用户身份的凭据，绝不能随用户对象一起序列化返回
+// （审计报告 H2）。需要口令哈希或 access_token 的内部流程请显式传 true。
 func GetUserById(id int, selectAll bool) (*User, error) {
 	if id == 0 {
 		return nil, errors.New("id 为空！")
@@ -300,7 +355,7 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	if selectAll {
 		err = DB.First(&user, "id = ?", id).Error
 	} else {
-		err = DB.Omit("password").First(&user, "id = ?", id).Error
+		err = DB.Omit("password", "access_token").First(&user, "id = ?", id).Error
 	}
 	return &user, err
 }
@@ -331,51 +386,38 @@ func HardDeleteUserById(id int) error {
 }
 
 func inviteUser(inviterId int) (err error) {
-	user, err := GetUserById(inviterId, true)
-	if err != nil {
-		return err
-	}
-	user.AffCount++
-	user.AffQuota += common.QuotaForInviter
-	user.AffHistoryQuota += common.QuotaForInviter
-	return DB.Save(user).Error
+	// 原子自增，避免整行 Save 覆盖并发发生的余额/状态变更。
+	return DB.Model(&User{}).Where("id = ?", inviterId).Updates(map[string]interface{}{
+		"aff_count":         gorm.Expr("aff_count + 1"),
+		"aff_quota":         gorm.Expr("aff_quota + ?", common.QuotaForInviter),
+		"aff_history":       gorm.Expr("aff_history + ?", common.QuotaForInviter),
+	}).Error
 }
 
+// TransferAffQuotaToQuota 将邀请额度（AffQuota）转为可用余额（Quota）。
+//
+// 并发安全：使用单条带守卫的原子 SQL 完成"检查余量 + 双向扣加"，不再依赖
+// FOR UPDATE（SQLite 下是空操作）也不再整行 Save（会覆盖并发写入）。
 func (user *User) TransferAffQuotaToQuota(quota int) error {
+	if quota <= 0 {
+		return errors.New("转移额度必须大于 0！")
+	}
 	// 检查quota是否小于最小额度
 	if float64(quota) < common.QuotaPerUnit {
 		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(int(common.QuotaPerUnit)))
 	}
 
-	// 开始数据库事务
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return tx.Error
+	result := DB.Model(&User{}).Where("id = ? AND aff_quota >= ?", user.Id, quota).Updates(map[string]interface{}{
+		"aff_quota": gorm.Expr("aff_quota - ?", quota),
+		"quota":     gorm.Expr("quota + ?", quota),
+	})
+	if result.Error != nil {
+		return result.Error
 	}
-	defer tx.Rollback() // 确保在函数退出时事务能回滚
-
-	// 加锁查询用户以确保数据一致性
-	err := tx.Set("gorm:query_option", "FOR UPDATE").First(&user, user.Id).Error
-	if err != nil {
-		return err
-	}
-
-	// 再次检查用户的AffQuota是否足够
-	if user.AffQuota < quota {
+	if result.RowsAffected == 0 {
 		return errors.New("邀请额度不足！")
 	}
-
-	// 更新用户额度
-	user.AffQuota -= quota
-	user.Quota += quota
-
-	// 保存用户状态
-	if err := tx.Save(user).Error; err != nil {
-		return err
-	}
-
-	// 提交事务
-	return tx.Commit().Error
+	return nil
 }
 
 func (user *User) Insert(inviterId int) error {
@@ -412,7 +454,9 @@ func (user *User) Insert(inviterId int) error {
 			currentSetting := createdUser.GetSetting()
 			currentSetting.SidebarModules = defaultSidebarConfig
 			createdUser.SetSetting(currentSetting)
-			createdUser.Update(false)
+			if err := createdUser.UpdateSetting(createdUser.Setting); err != nil {
+				common.SysLog("failed to initialize sidebar config for new user: " + err.Error())
+			}
 			common.SysLog(fmt.Sprintf("为新用户 %s (角色: %d) 初始化边栏配置", createdUser.Username, createdUser.Role))
 		}
 	}
@@ -473,7 +517,9 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 			currentSetting := createdUser.GetSetting()
 			currentSetting.SidebarModules = defaultSidebarConfig
 			createdUser.SetSetting(currentSetting)
-			createdUser.Update(false)
+			if err := createdUser.UpdateSetting(createdUser.Setting); err != nil {
+				common.SysLog("failed to initialize sidebar config for new user: " + err.Error())
+			}
 			common.SysLog(fmt.Sprintf("为新用户 %s (角色: %d) 初始化边栏配置", createdUser.Username, createdUser.Role))
 		}
 	}
@@ -493,51 +539,116 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 	}
 }
 
-func (user *User) Update(updatePassword bool) error {
-	var err error
-	if updatePassword {
-		user.Password, err = common.Password2Hash(user.Password)
-		if err != nil {
-			return err
-		}
+// updateColumns 按列白名单更新指定用户，并在成功后刷新缓存。
+//
+// 这是本文件唯一允许的"部分更新"入口。刻意不提供"整行写回"的方法：
+// 旧实现用 `newUser := *user; DB.First(&user, id); Updates(newUser)` 把调用方
+// 读到的整行快照写回，而 GORM 对结构体会写入所有非零字段，于是 quota/used_quota/
+// role/status/group 会被旧值覆盖——只要更新窗口与一次计费结算重叠，那次扣费就被抹掉
+// （审计报告 H3）。每次写回后必须重新读行，否则缓存里留下的是更新前的旧值。
+func updateColumns(id int, columns map[string]interface{}) error {
+	if id == 0 {
+		return errors.New("id 为空！")
 	}
-	newUser := *user
-	DB.First(&user, user.Id)
-	if err = DB.Model(user).Updates(newUser).Error; err != nil {
+	if len(columns) == 0 {
+		return nil
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Updates(columns).Error; err != nil {
 		return err
 	}
-
-	// Update cache
-	return updateUserCache(*user)
+	// 重新读取最新行，避免把更新前的快照写进缓存。
+	refreshed, err := GetUserById(id, false)
+	if err != nil {
+		return err
+	}
+	return updateUserCache(*refreshed)
 }
 
-func (user *User) Edit(updatePassword bool) error {
-	var err error
+// UpdateAccessToken 仅写入 access_token。
+func (user *User) UpdateAccessToken(token string) error {
+	return updateColumns(user.Id, map[string]interface{}{"access_token": token})
+}
+
+// UpdateEmail 仅写入 email。
+func (user *User) UpdateEmail(email string) error {
+	return updateColumns(user.Id, map[string]interface{}{"email": email})
+}
+
+// UpdateSetting 仅写入 setting（边栏、通知等用户偏好）。
+func (user *User) UpdateSetting(setting string) error {
+	return updateColumns(user.Id, map[string]interface{}{"setting": setting})
+}
+
+// UpdateAffCode 仅写入 aff_code。
+func (user *User) UpdateAffCode(code string) error {
+	return updateColumns(user.Id, map[string]interface{}{"aff_code": code})
+}
+
+// UpdateProfile 更新用户可自行修改的资料字段。
+func (user *User) UpdateProfile(updatePassword bool) error {
+	columns := map[string]interface{}{
+		"username":     user.Username,
+		"display_name": user.DisplayName,
+	}
 	if updatePassword {
-		user.Password, err = common.Password2Hash(user.Password)
+		hashed, err := common.Password2Hash(user.Password)
 		if err != nil {
 			return err
 		}
+		columns["password"] = hashed
 	}
+	return updateColumns(user.Id, columns)
+}
 
-	newUser := *user
-	updates := map[string]interface{}{
-		"username":     newUser.Username,
-		"display_name": newUser.DisplayName,
-		"group":        newUser.Group,
-		"remark":       newUser.Remark,
+// UpdateOAuthBindings 仅写入第三方身份绑定与邮箱，用于 OAuth 首登/绑定流程。
+func (user *User) UpdateOAuthBindings() error {
+	return updateColumns(user.Id, map[string]interface{}{
+		"email":       user.Email,
+		"github_id":   user.GitHubId,
+		"discord_id":  user.DiscordId,
+		"oidc_id":     user.OidcId,
+		"wechat_id":   user.WeChatId,
+		"telegram_id": user.TelegramId,
+		"linux_do_id": user.LinuxDOId,
+	})
+}
+
+// UpdateAdminFields 仅允许管理员修改这些字段；配额必须走原子增减函数，不在此列表内。
+// 调用方在状态/角色/分组变更后必须同时清理用户与其令牌缓存。
+func (user *User) UpdateAdminFields(fields map[string]interface{}) error {
+	allowed := map[string]struct{}{
+		"status":       {},
+		"role":         {},
+		"group":        {},
+		"remark":       {},
+		"username":     {},
+		"display_name": {},
+	}
+	columns := make(map[string]interface{}, len(fields))
+	for k, v := range fields {
+		if _, ok := allowed[k]; ok {
+			columns[k] = v
+		}
+	}
+	return updateColumns(user.Id, columns)
+}
+
+// Edit 由管理员更新用户资料（用户名/显示名/分组/备注，可选口令）。
+func (user *User) Edit(updatePassword bool) error {
+	columns := map[string]interface{}{
+		"username":     user.Username,
+		"display_name": user.DisplayName,
+		"group":        user.Group,
+		"remark":       user.Remark,
 	}
 	if updatePassword {
-		updates["password"] = newUser.Password
+		hashed, err := common.Password2Hash(user.Password)
+		if err != nil {
+			return err
+		}
+		columns["password"] = hashed
 	}
-
-	DB.First(&user, user.Id)
-	if err = DB.Model(user).Updates(updates).Error; err != nil {
-		return err
-	}
-
-	// Update cache
-	return updateUserCache(*user)
+	return updateColumns(user.Id, columns)
 }
 
 func (user *User) ClearBinding(bindingType string) error {
@@ -882,21 +993,29 @@ func GetUserSetting(id int, fromDB bool) (settingMap dto.UserSetting, err error)
 	return userBase.GetSetting(), nil
 }
 
+// IncreaseUserQuota 增加用户余额。
+//
+// 余额列（quota）刻意不走批量更新，且缓存在写库前同步更新：
+//   - 写库同步：批量更新会把增量留在进程内存里，进程崩溃/重启即丢失（审计报告 M10），
+//     且余额判定读到的是未落库的旧值，会造成超额消费（审计报告 H4）；
+//   - 缓存同步：Redis 是 GetUserQuota 的首选来源，若异步更新，并发请求会读到未扣减的余额。
+//
+// db 参数保留仅为兼容既有调用点，余额列已不再受其影响。
 func IncreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
-	gopool.Go(func() {
-		err := cacheIncrUserQuota(id, int64(quota))
-		if err != nil {
-			common.SysLog("failed to increase user quota: " + err.Error())
-		}
-	})
-	if !db && common.BatchUpdateEnabled {
-		addNewRecord(BatchUpdateTypeUserQuota, id, quota)
-		return nil
+	if err := cacheIncrUserQuota(id, int64(quota)); err != nil {
+		common.SysLog("failed to increase user quota cache: " + err.Error())
 	}
-	return increaseUserQuota(id, quota)
+	if err := increaseUserQuota(id, quota); err != nil {
+		// 回滚缓存，避免缓存与数据库永久背离
+		if cacheErr := cacheDecrUserQuota(id, int64(quota)); cacheErr != nil {
+			common.SysLog("failed to rollback user quota cache: " + cacheErr.Error())
+		}
+		return err
+	}
+	return nil
 }
 
 func increaseUserQuota(id int, quota int) (err error) {
@@ -907,21 +1026,21 @@ func increaseUserQuota(id int, quota int) (err error) {
 	return err
 }
 
+// DecreaseUserQuota 扣减用户余额。与 IncreaseUserQuota 相同的同步策略，见其注释。
 func DecreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
-	gopool.Go(func() {
-		err := cacheDecrUserQuota(id, int64(quota))
-		if err != nil {
-			common.SysLog("failed to decrease user quota: " + err.Error())
-		}
-	})
-	if !db && common.BatchUpdateEnabled {
-		addNewRecord(BatchUpdateTypeUserQuota, id, -quota)
-		return nil
+	if err := cacheDecrUserQuota(id, int64(quota)); err != nil {
+		common.SysLog("failed to decrease user quota cache: " + err.Error())
 	}
-	return decreaseUserQuota(id, quota)
+	if err := decreaseUserQuota(id, quota); err != nil {
+		if cacheErr := cacheIncrUserQuota(id, int64(quota)); cacheErr != nil {
+			common.SysLog("failed to rollback user quota cache: " + cacheErr.Error())
+		}
+		return err
+	}
+	return nil
 }
 
 func decreaseUserQuota(id int, quota int) (err error) {
@@ -932,6 +1051,31 @@ func decreaseUserQuota(id int, quota int) (err error) {
 	return err
 }
 
+// DecreaseUserQuotaGuarded 在数据库层面以条件更新扣减余额：仅当 quota >= amount 时生效。
+// 并发调用不会把余额扣成负数；ok=false 表示余额不足且未做任何修改。
+// 预扣费与结算都应使用该函数，而不是"先读后扣"。
+func DecreaseUserQuotaGuarded(id int, amount int) (ok bool, err error) {
+	if amount < 0 {
+		return false, errors.New("quota 不能为负数！")
+	}
+	if amount == 0 {
+		return true, nil
+	}
+	result := DB.Model(&User{}).Where("id = ? AND quota >= ?", id, amount).
+		Update("quota", gorm.Expr("quota - ?", amount))
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return false, nil
+	}
+	if cacheErr := cacheDecrUserQuota(id, int64(amount)); cacheErr != nil {
+		common.SysLog("failed to decrease user quota cache: " + cacheErr.Error())
+	}
+	return true, nil
+}
+
+// DeltaUpdateUserQuota 按符号选择增加或扣减余额，供既有的正负增量调用点使用。
 func DeltaUpdateUserQuota(id int, delta int) (err error) {
 	if delta == 0 {
 		return nil

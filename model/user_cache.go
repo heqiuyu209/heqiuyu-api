@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,6 +23,9 @@ type UserBase struct {
 	Status   int    `json:"status"`
 	Username string `json:"username"`
 	Setting  string `json:"setting"`
+	// Role 必须随缓存一起保存：鉴权中间件每次请求都用它判定权限，
+	// 不再信任会话 cookie 里登录时写入的角色。
+	Role int `json:"role"`
 }
 
 func (user *UserBase) WriteContext(c *gin.Context) {
@@ -93,8 +97,13 @@ func GetUserCache(userId int) (userCache *UserBase, err error) {
 
 	// Try getting from Redis first
 	userCache, err = cacheGetUserBase(userId)
-	if err == nil {
-		return userCache, nil
+	if err == nil && userCache != nil {
+		// 旧版本写入的 hash 没有 Role 字段，此时 Role 解析为 0。
+		// 若直接采信会把所有用户当成游客，因此发现 Role==0 时回退读库并刷新缓存。
+		if userCache.Role != 0 {
+			return userCache, nil
+		}
+		err = fmt.Errorf("cached user %d has no role field, reloading from database", userId)
 	}
 
 	// If Redis fails, get from DB
@@ -113,9 +122,29 @@ func GetUserCache(userId int) (userCache *UserBase, err error) {
 		Username: user.Username,
 		Setting:  user.Setting,
 		Email:    user.Email,
+		Role:     user.Role,
 	}
 
 	return userCache, nil
+}
+
+// GetUserAuthz 一次返回鉴权所需的全部权威字段。
+//
+// 这是唯一的身份权威来源：会话 cookie 只提供用户 ID，角色/状态/分组一律以
+// 数据库（经缓存）为准，从而让封禁、降权、分组变更对已登录会话立即生效。
+// Redis 未启用时退化为一次 SELECT。
+func GetUserAuthz(userId int) (status int, role int, group string, username string, err error) {
+	if userId <= 0 {
+		return 0, 0, "", "", errors.New("userId 无效")
+	}
+	userCache, err := GetUserCache(userId)
+	if err != nil {
+		return 0, 0, "", "", err
+	}
+	if userCache == nil {
+		return 0, 0, "", "", errors.New("user not found")
+	}
+	return userCache.Status, userCache.Role, userCache.Group, userCache.Username, nil
 }
 
 func cacheGetUserBase(userId int) (*UserBase, error) {

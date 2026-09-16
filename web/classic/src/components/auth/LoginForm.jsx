@@ -113,6 +113,15 @@ const LoginForm = () => {
   const githubButtonText = t(githubButtonTextKeyByState[githubButtonState]);
   const [customOAuthLoading, setCustomOAuthLoading] = useState({});
 
+  // 后端所有登录完成路径（OAuth / 微信 / Telegram / Passkey）统一返回
+  // require_2fa，此时并未建立登录态，需要继续完成两步验证。
+  const is2FARequired = (data) => Boolean(data && data.require_2fa);
+
+  const handle2FARequired = () => {
+    showInfo(t('为了保护账户安全，请验证您的两步验证码。'));
+    setShowTwoFA(true);
+  };
+
   const logo = getLogo();
   const systemName = getSystemName();
 
@@ -172,6 +181,14 @@ const LoginForm = () => {
     }
   }, []);
 
+  useEffect(() => {
+    // OAuth 回调 / 注册页等场景在需要两步验证时跳转回登录页并带上
+    // require_2fa，这里直接打开两步验证弹窗。
+    if (searchParams.get('require_2fa')) {
+      handle2FARequired();
+    }
+  }, []);
+
   const onWeChatLoginClicked = () => {
     if ((hasUserAgreement || hasPrivacyPolicy) && !agreedToTerms) {
       showInfo(t('请先阅读并同意用户协议和隐私政策'));
@@ -194,6 +211,12 @@ const LoginForm = () => {
       );
       const { success, message, data } = res.data;
       if (success) {
+        if (is2FARequired(data)) {
+          setShowWeChatLoginModal(false);
+          handle2FARequired();
+          return;
+        }
+
         userDispatch({ type: 'login', payload: data });
         localStorage.setItem('user', JSON.stringify(data));
         setUserData(data);
@@ -295,6 +318,11 @@ const LoginForm = () => {
       const res = await API.get(`/api/oauth/telegram/login`, { params });
       const { success, message, data } = res.data;
       if (success) {
+        if (is2FARequired(data)) {
+          handle2FARequired();
+          return;
+        }
+
         userDispatch({ type: 'login', payload: data });
         localStorage.setItem('user', JSON.stringify(data));
         showSuccess('登录成功！');
@@ -452,6 +480,11 @@ const LoginForm = () => {
       );
       const finish = finishRes.data;
       if (finish.success) {
+        if (is2FARequired(finish.data)) {
+          handle2FARequired();
+          return;
+        }
+
         userDispatch({ type: 'login', payload: finish.data });
         setUserData(finish.data);
         updateAPI();

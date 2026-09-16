@@ -33,135 +33,154 @@ func validUserInfo(username string, role int) bool {
 	return true
 }
 
-func authHelper(c *gin.Context, minRole int) {
+// resolvedIdentity 是鉴权成功后的权威身份信息。
+type resolvedIdentity struct {
+	Id             int
+	Username       string
+	Role           int
+	Status         int
+	Group          string
+	UseAccessToken bool
+}
+
+// denyJSON 输出鉴权失败响应并中止请求。
+func denyJSON(c *gin.Context, httpStatus int, messageKey string) {
+	c.JSON(httpStatus, gin.H{
+		"success": false,
+		"message": common.TranslateMessage(c, messageKey),
+	})
+	c.Abort()
+}
+
+// authorize 是唯一的鉴权入口。
+//
+// 它先从会话 cookie 或访问令牌解析出**用户 ID**，再从数据库（经 Redis 缓存）
+// 读取权威的 status / role / group。
+//
+// 关键点：绝不信任会话里的 role / status / group。会话 cookie 只签名、不加密，
+// 有效期 30 天（main.go），其中保存的只是登录当时的快照。旧实现直接采信这些快照，
+// 导致封禁、降权、删除用户对已登录会话完全无效——被降权的管理员可以继续以管理员
+// 身份操作最长 30 天（审计报告 H1）。
+func authorize(c *gin.Context, minRole int) (*resolvedIdentity, bool) {
 	session := sessions.Default(c)
-	username := session.Get("username")
-	role := session.Get("role")
-	id := session.Get("id")
-	status := session.Get("status")
+	idRaw := session.Get("id")
 	useAccessToken := false
-	if username == nil {
-		// Check access token
+
+	var userId int
+	if idRaw != nil {
+		id, ok := idRaw.(int)
+		if !ok || id <= 0 {
+			denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthNotLoggedIn)
+			return nil, false
+		}
+		userId = id
+	} else {
+		// 无会话：尝试访问令牌（access token）路径
 		accessToken := c.Request.Header.Get("Authorization")
 		if accessToken == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
-			})
-			c.Abort()
-			return
+			denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthNotLoggedIn)
+			return nil, false
 		}
 		user, authErr := model.ValidateAccessToken(accessToken)
 		if authErr != nil {
 			if errors.Is(authErr, model.ErrDatabase) {
 				common.SysLog("ValidateAccessToken database error: " + authErr.Error())
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"success": false,
-					"message": common.TranslateMessage(c, i18n.MsgDatabaseError),
-				})
+				denyJSON(c, http.StatusInternalServerError, i18n.MsgDatabaseError)
 			} else {
-				c.JSON(http.StatusOK, gin.H{
-					"success": false,
-					"message": common.TranslateMessage(c, i18n.MsgAuthAccessTokenInvalid),
-				})
+				denyJSON(c, http.StatusOK, i18n.MsgAuthAccessTokenInvalid)
 			}
-			c.Abort()
-			return
+			return nil, false
 		}
-		if user != nil && user.Username != "" {
-			if !validUserInfo(user.Username, user.Role) {
-				c.JSON(http.StatusOK, gin.H{
-					"success": false,
-					"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),
-				})
-				c.Abort()
-				return
-			}
-			// Token is valid
-			username = user.Username
-			role = user.Role
-			id = user.Id
-			status = user.Status
-			useAccessToken = true
-		} else {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": common.TranslateMessage(c, i18n.MsgAuthAccessTokenInvalid),
-			})
-			c.Abort()
-			return
+		if user == nil || user.Username == "" || user.Id == 0 {
+			denyJSON(c, http.StatusOK, i18n.MsgAuthAccessTokenInvalid)
+			return nil, false
 		}
+		userId = user.Id
+		useAccessToken = true
 	}
+
 	// get header Heqiuyu-Api-User
 	apiUserIdStr := c.Request.Header.Get("Heqiuyu-Api-User")
 	if apiUserIdStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdNotProvided),
-		})
-		c.Abort()
-		return
+		denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthUserIdNotProvided)
+		return nil, false
 	}
 	apiUserId, err := strconv.Atoi(apiUserIdStr)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdFormatError),
-		})
-		c.Abort()
-		return
+		denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthUserIdFormatError)
+		return nil, false
+	}
+	if userId != apiUserId {
+		denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthUserIdMismatch)
+		return nil, false
+	}
 
+	// 权威身份：每次请求都从数据库（经缓存）读取，使封禁/降权/分组变更立即生效。
+	status, role, group, username, err := model.GetUserAuthz(userId)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// 用户已被删除：其旧会话必须立即失效
+			denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthNotLoggedIn)
+			return nil, false
+		}
+		common.SysLog(fmt.Sprintf("GetUserAuthz database error for user %d: %s", userId, err.Error()))
+		denyJSON(c, http.StatusInternalServerError, i18n.MsgDatabaseError)
+		return nil, false
 	}
-	if id != apiUserId {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdMismatch),
-		})
-		c.Abort()
-		return
+	if status == common.UserStatusDisabled {
+		denyJSON(c, http.StatusOK, i18n.MsgAuthUserBanned)
+		return nil, false
 	}
-	if status.(int) == common.UserStatusDisabled {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserBanned),
-		})
-		c.Abort()
-		return
+	if role < minRole {
+		denyJSON(c, http.StatusOK, i18n.MsgAuthInsufficientPrivilege)
+		return nil, false
 	}
-	if role.(int) < minRole {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
-		})
-		c.Abort()
-		return
+	if !validUserInfo(username, role) {
+		denyJSON(c, http.StatusOK, i18n.MsgAuthUserInfoInvalid)
+		return nil, false
 	}
-	if !validUserInfo(username.(string), role.(int)) {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),
-		})
-		c.Abort()
+
+	return &resolvedIdentity{
+		Id:             userId,
+		Username:       username,
+		Role:           role,
+		Status:         status,
+		Group:          group,
+		UseAccessToken: useAccessToken,
+	}, true
+}
+
+func authHelper(c *gin.Context, minRole int) {
+	identity, ok := authorize(c, minRole)
+	if !ok {
 		return
 	}
 	// 防止不同 heqiuyu 版本冲突，导致数据不通用
 	c.Header("Auth-Version", "864b7076dbcd0a3c01b5520316720ebf")
-	c.Set("username", username)
-	c.Set("role", role)
-	c.Set("id", id)
-	c.Set("group", session.Get("group"))
-	c.Set("user_group", session.Get("group"))
-	c.Set("use_access_token", useAccessToken)
+	c.Set("username", identity.Username)
+	c.Set("role", identity.Role)
+	c.Set("id", identity.Id)
+	c.Set("group", identity.Group)
+	c.Set("user_group", identity.Group)
+	c.Set("use_access_token", identity.UseAccessToken)
 
 	c.Next()
 }
 
+// TryUserAuth 用于"登录与否都可访问"的接口（如定价页）。
+// 仅在会话有效且用户未被封禁时注入权威身份，绝不阻断请求。
 func TryUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		session := sessions.Default(c)
-		id := session.Get("id")
-		if id != nil {
-			c.Set("id", id)
+		if id, ok := session.Get("id").(int); ok && id > 0 {
+			status, role, group, username, err := model.GetUserAuthz(id)
+			if err == nil && status == common.UserStatusEnabled && validUserInfo(username, role) {
+				c.Set("id", id)
+				c.Set("username", username)
+				c.Set("role", role)
+				c.Set("group", group)
+				c.Set("user_group", group)
+			}
 		}
 		c.Next()
 	}
@@ -189,13 +208,22 @@ func RootAuth() func(c *gin.Context) {
 // Used for endpoints that need to be accessible from both the dashboard and API clients.
 func TokenOrUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		// Try session auth first (dashboard users)
+		// Try session auth first (dashboard users), verified against the database
+		// so that a disabled/deleted/demoted account cannot keep using a stale cookie.
 		session := sessions.Default(c)
-		if id := session.Get("id"); id != nil {
-			if status, ok := session.Get("status").(int); ok && status == common.UserStatusEnabled {
+		if id, ok := session.Get("id").(int); ok && id > 0 {
+			status, role, group, username, err := model.GetUserAuthz(id)
+			if err == nil && status == common.UserStatusEnabled && validUserInfo(username, role) {
 				c.Set("id", id)
+				c.Set("username", username)
+				c.Set("role", role)
+				c.Set("group", group)
+				c.Set("user_group", group)
 				c.Next()
 				return
+			}
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				common.SysLog(fmt.Sprintf("TokenOrUserAuth GetUserAuthz error for user %d: %s", id, err.Error()))
 			}
 		}
 		// Fall back to token auth (API clients)
@@ -224,33 +252,39 @@ func TokenAuthReadOnly() func(c *gin.Context) {
 		parts := strings.Split(key, "-")
 		key = parts[0]
 
-		token, err := model.GetTokenByKey(key, false)
+		// 用与中继路径完全相同的校验（状态 + 过期时间 + 剩余额度），
+		// 而不是只比对 status 列：否则过期或额度耗尽的令牌仍能用于查询接口。
+		token, err := model.ValidateUserToken(key)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				c.JSON(http.StatusUnauthorized, gin.H{
-					"success": false,
-					"message": common.TranslateMessage(c, i18n.MsgTokenInvalid),
-				})
-			} else {
-				common.SysLog("TokenAuthReadOnly GetTokenByKey database error: " + err.Error())
+			if errors.Is(err, model.ErrDatabase) {
+				common.SysLog("TokenAuthReadOnly ValidateUserToken database error: " + err.Error())
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"success": false,
 					"message": common.TranslateMessage(c, i18n.MsgDatabaseError),
+				})
+			} else {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"success": false,
+					"message": common.TranslateMessage(c, i18n.MsgTokenInvalid),
 				})
 			}
 			c.Abort()
 			return
 		}
 
-		// 安全修复：不再跳过令牌状态校验。
-		// 已禁用、已过期或额度已耗尽的令牌不得再用于查询接口。
-		if token.Status != common.TokenStatusEnabled {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"message": common.TranslateMessage(c, i18n.MsgTokenStatusUnavailable),
-			})
-			c.Abort()
-			return
+		// 令牌级 IP 白名单必须与中继路径一致，否则被限制的令牌可被异地用于查询。
+		allowIps := token.GetIpLimits()
+		if len(allowIps) > 0 {
+			clientIp := c.ClientIP()
+			ip := net.ParseIP(clientIp)
+			if ip == nil || !common.IsIpInCIDRList(ip, allowIps) {
+				c.JSON(http.StatusForbidden, gin.H{
+					"success": false,
+					"message": common.TranslateMessage(c, i18n.MsgTokenStatusUnavailable),
+				})
+				c.Abort()
+				return
+			}
 		}
 
 		userCache, err := model.GetUserCache(token.UserId)

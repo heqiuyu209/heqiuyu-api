@@ -16,26 +16,8 @@ export interface ApiResponse<T = unknown> {
  */
 export type TopupInfoResponse = ApiResponse<TopupInfo>
 export type RedemptionResponse = ApiResponse<number>
-export type AmountResponse = ApiResponse<string>
-export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
-  url?: string
-}
-export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
-export type CreemPaymentResponse = ApiResponse<{ checkout_url: string }>
-export type WaffoPaymentResponse = ApiResponse<
-  { payment_url?: string } | string
->
-export type WaffoPancakePaymentResponse = ApiResponse<
-  | {
-      checkout_url?: string
-      session_id?: string
-      expires_at?: number | string
-      order_id?: string
-    }
-  | string
->
 
 /**
  * Creem product configuration
@@ -51,16 +33,6 @@ export interface CreemProduct {
   quota: number
   /** Currency (USD or EUR) */
   currency: 'USD' | 'EUR'
-}
-
-/**
- * Creem payment request
- */
-export interface CreemPaymentRequest {
-  /** Creem product ID */
-  product_id: string
-  /** Payment method identifier */
-  payment_method: 'creem'
 }
 
 /**
@@ -148,42 +120,6 @@ export interface RedemptionRequest {
 }
 
 /**
- * Payment request parameters
- */
-export interface PaymentRequest {
-  /** Topup amount */
-  amount: number
-  /** Payment method identifier */
-  payment_method: string
-}
-
-/**
- * Waffo payment request parameters
- */
-export interface WaffoPaymentRequest {
-  /** Topup amount */
-  amount: number
-  /** Optional server-side Waffo payment method index */
-  pay_method_index?: number
-}
-
-/**
- * Waffo Pancake payment request parameters
- */
-export interface WaffoPancakePaymentRequest {
-  /** Topup amount */
-  amount: number
-}
-
-/**
- * Amount calculation request
- */
-export interface AmountRequest {
-  /** Topup amount to calculate */
-  amount: number
-}
-
-/**
  * Affiliate quota transfer request
  */
 export interface AffiliateTransferRequest {
@@ -250,11 +186,4 @@ export interface TopupRecord {
 export interface BillingHistoryResponse {
   items: TopupRecord[]
   total: number
-}
-
-/**
- * Complete order request (admin only)
- */
-export interface CompleteOrderRequest {
-  trade_no: string
 }

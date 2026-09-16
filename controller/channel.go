@@ -17,6 +17,7 @@ import (
 	"github.com/heqiuyu/heqiuyu-api/relay/channel/gemini"
 	"github.com/heqiuyu/heqiuyu-api/relay/channel/ollama"
 	"github.com/heqiuyu/heqiuyu-api/service"
+	"github.com/heqiuyu/heqiuyu-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -439,6 +440,18 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 		return fmt.Errorf("渠道额外设置[channel setting] 格式错误：%s", err.Error())
 	}
 
+	// 可选严格模式（CHANNEL_BASE_URL_STRICT=true）：对 base_url 应用 SSRF 策略。
+	// 默认关闭，因为自建内网网关是正当用法；开启后私网/回环地址会被拒绝。
+	if common.ChannelBaseURLStrict && channel != nil && channel.BaseURL != nil {
+		baseURL := strings.TrimSpace(*channel.BaseURL)
+		if baseURL != "" {
+			fetchSetting := system_setting.GetFetchSetting()
+			if err := common.ValidateURLWithFetchSetting(baseURL, fetchSetting.EnableSSRFProtection, fetchSetting.AllowPrivateIp, fetchSetting.DomainFilterMode, fetchSetting.IpFilterMode, fetchSetting.DomainList, fetchSetting.IpList, fetchSetting.AllowedPorts, fetchSetting.ApplyIPFilterForDomain); err != nil {
+				return fmt.Errorf("渠道 base_url 未通过安全校验（CHANNEL_BASE_URL_STRICT=true）: %s", err.Error())
+			}
+		}
+	}
+
 	// 如果是添加操作，检查 channel 和 key 是否为空
 	if isAdd {
 		if channel == nil || channel.Key == "" {
@@ -839,6 +852,60 @@ type PatchChannel struct {
 	KeyMode      *string `json:"key_mode"` // 多key模式下密钥覆盖或者追加
 }
 
+// channelDestinationChanged 判断本次更新是否改变了渠道的"出站目标"或"凭据注入"配置。
+//
+// 这些字段决定了服务端会把上游密钥发往哪里，因此它们的修改权限必须与"读取密钥"
+// （POST /api/channel/:id/key，root + 二次验证）保持同等强度。
+func channelDestinationChanged(origin *model.Channel, patch *PatchChannel) bool {
+	changed := func(next *string, current *string) bool {
+		if next == nil {
+			return false
+		}
+		nextValue := strings.TrimSpace(*next)
+		currentValue := ""
+		if current != nil {
+			currentValue = strings.TrimSpace(*current)
+		}
+		return nextValue != "" && nextValue != currentValue
+	}
+	// Setting 里包含代理（Proxy）等出站相关配置，一并纳入。
+	if changed(patch.BaseURL, origin.BaseURL) ||
+		changed(patch.ParamOverride, origin.ParamOverride) ||
+		changed(patch.HeaderOverride, origin.HeaderOverride) ||
+		changed(patch.Setting, origin.Setting) {
+		return true
+	}
+	return false
+}
+
+// requireChannelDestinationPrivilege 校验调用者是否有权修改渠道的出站目标。
+// 要求：root 角色；若该账户启用了 2FA 或 Passkey，还需要近期完成过对应的安全验证。
+// 校验失败时会自行写出响应并返回 false（避免重复写响应体）。
+func requireChannelDestinationPrivilege(c *gin.Context) bool {
+	if c.GetInt("role") < common.RoleRootUser {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "修改渠道的 base_url / 代理 / 请求覆盖配置需要 root 权限",
+			"code":    "CHANNEL_DESTINATION_REQUIRES_ROOT",
+		})
+		return false
+	}
+	userId := c.GetInt("id")
+
+	twoFA, err := model.GetTwoFAByUserId(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return false
+	}
+	if twoFA != nil && twoFA.IsEnabled {
+		return requireSecureVerificationMethod(c, secureVerificationMethod2FA)
+	}
+	if _, passkeyErr := model.GetPasskeyByUserID(userId); passkeyErr == nil {
+		return requireSecureVerificationMethod(c, secureVerificationMethodPasskey)
+	}
+	return true
+}
+
 func UpdateChannel(c *gin.Context) {
 	channel := PatchChannel{}
 	err := c.ShouldBindJSON(&channel)
@@ -867,6 +934,19 @@ func UpdateChannel(c *gin.Context) {
 
 	// Always copy the original ChannelInfo so that fields like IsMultiKey and MultiKeySize are retained.
 	channel.ChannelInfo = originChannel.ChannelInfo
+
+	// 安全门禁：修改"出站目标"类字段必须由 root 执行，且（在操作者启用 2FA/Passkey 时）
+	// 需要近期通过安全验证。
+	//
+	// 否则普通管理员可以改掉 base_url 却保留原有密钥（model.Channel.Update 用结构体
+	// Updates，会跳过空字符串的 key），随后调用 GET /api/channel/test/:id 或
+	// GET /api/channel/fetch_models/:id，让服务端带着**真实上游密钥**去请求攻击者的
+	// 服务器，从而绕过 POST /api/channel/:id/key 上的 root + 二次验证门禁（审计报告 H6）。
+	if channelDestinationChanged(originChannel, &channel) {
+		if !requireChannelDestinationPrivilege(c) {
+			return
+		}
+	}
 
 	// If the request explicitly specifies a new MultiKeyMode, apply it on top of the original info.
 	if channel.MultiKeyMode != nil && *channel.MultiKeyMode != "" {
@@ -1033,10 +1113,14 @@ func FetchModels(c *gin.Context) {
 		return
 	}
 
-	client := &http.Client{}
 	url := fmt.Sprintf("%s/v1/models", baseURL)
 
-	request, err := http.NewRequest("GET", url, nil)
+	// 注意：渠道 base_url 是**运营者**配置的，自建内网网关是正常用法，
+	// 因此这里刻意不做私网地址拦截（否则会打断部署）。但必须使用带超时且会复查
+	// 重定向的客户端，而不是无超时的裸 http.Client（审计报告 M5）。
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1047,7 +1131,7 @@ func FetchModels(c *gin.Context) {
 
 	request.Header.Set("Authorization", "Bearer "+key)
 
-	response, err := client.Do(request)
+	response, err := service.GetHttpClient().Do(request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -1165,6 +1249,13 @@ func CopyChannel(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "invalid id"})
+		return
+	}
+
+	// 复制渠道会把上游密钥复制进一条新记录，而新记录的 base_url 随后可被修改，
+	// 等价于拿到了一份可指向任意地址的密钥，因此与"修改出站目标"同级要求
+	// root + 二次验证（审计报告 H6）。
+	if !requireChannelDestinationPrivilege(c) {
 		return
 	}
 

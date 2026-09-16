@@ -391,12 +391,20 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 	if err != nil {
 		return err
 	}
-	if !relayInfo.TokenUnlimited && token.RemainQuota < quota {
+	if relayInfo.TokenUnlimited {
+		return nil
+	}
+	if token.RemainQuota < quota {
 		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
 	}
-	err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
+	// 守卫式扣减：数据库层面保证 remain_quota >= quota 才会生效。
+	// 仅"先读后扣"在并发下会让多个请求同时通过上面的检查并把额度压成负数（审计报告 M11）。
+	ok, err := model.DecreaseTokenQuotaGuarded(relayInfo.TokenId, relayInfo.TokenKey, quota)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
 	}
 	return nil
 }

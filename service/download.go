@@ -65,6 +65,8 @@ func DoDownloadRequest(originUrl string, reason ...string) (resp *http.Response,
 		}
 
 		common.SysLog(fmt.Sprintf("downloading from origin: %s, reason: %s", common.MaskSensitiveInfo(originUrl), strings.Join(reason, ", ")))
-		return GetHttpClient().Get(originUrl)
+		// 使用策略感知客户端：它在连接建立时再次校验真实 IP（防 DNS 重绑定），
+		// 而不仅仅是请求前校验一次 URL。
+		return GetFetchClient().Get(originUrl)
 	}
 }

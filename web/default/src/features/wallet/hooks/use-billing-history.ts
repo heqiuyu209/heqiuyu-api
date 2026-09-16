@@ -1,14 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { toast } from 'sonner'
-import { useIsAdmin } from '@/hooks/use-admin'
-import {
-  getUserBillingHistory,
-  getAllBillingHistory,
-  completeOrder,
-  isApiSuccess,
-} from '../api'
-import type { TopupRecord } from '../types'
+import { getUserBillingHistory, isApiSuccess } from '../api'
+import type { BillingHistoryResponse, TopupRecord } from '../types'
 
 // ============================================================================
 // Billing History Hook
@@ -21,82 +16,58 @@ interface UseBillingHistoryOptions {
   initialPageSize?: number
 }
 
+/**
+ * Stable React Query key for the current user's billing history.
+ */
+export function billingHistoryQueryKey(
+  page: number,
+  pageSize: number,
+  keyword: string
+): readonly ['wallet', 'billing-history', number, number, string] {
+  return ['wallet', 'billing-history', page, pageSize, keyword] as const
+}
+
+/**
+ * Billing history for the current user only.
+ *
+ * The admin (all users) view and the manual "complete order" action were
+ * removed together with the backend routes that served them.
+ */
 export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
   const { initialPage = 1, initialPageSize = 10 } = options
-  const isAdmin = useIsAdmin()
 
-  const [records, setRecords] = useState<TopupRecord[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(initialPage)
   const [pageSize, setPageSize] = useState(initialPageSize)
   const [keyword, setKeyword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [completing, setCompleting] = useState(false)
 
-  /**
-   * Fetch billing history
-   */
-  const fetchBillingHistory = useCallback(async () => {
-    setLoading(true)
-    try {
-      const response = isAdmin
-        ? await getAllBillingHistory(page, pageSize, keyword)
-        : await getUserBillingHistory(page, pageSize, keyword)
+  const query = useQuery({
+    queryKey: billingHistoryQueryKey(page, pageSize, keyword),
+    queryFn: async (): Promise<BillingHistoryResponse> => {
+      const response = await getUserBillingHistory(page, pageSize, keyword)
 
-      if (isApiSuccess(response) && response.data) {
-        setRecords(response.data.items || [])
-        setTotal(response.data.total || 0)
-      } else {
-        toast.error(
+      if (!isApiSuccess(response) || !response.data) {
+        throw new Error(
           response.message || i18next.t('Failed to load billing history')
         )
-        setRecords([])
-        setTotal(0)
-      }
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to fetch billing history:', error)
-      toast.error(i18next.t('Failed to load billing history'))
-      setRecords([])
-      setTotal(0)
-    } finally {
-      setLoading(false)
-    }
-  }, [isAdmin, page, pageSize, keyword])
-
-  /**
-   * Complete a pending order (admin only)
-   */
-  const handleCompleteOrder = useCallback(
-    async (tradeNo: string) => {
-      if (!isAdmin) {
-        toast.error(i18next.t('Admin access required'))
-        return false
       }
 
-      setCompleting(true)
-      try {
-        const response = await completeOrder({ trade_no: tradeNo })
-        if (isApiSuccess(response)) {
-          toast.success(i18next.t('Order completed successfully'))
-          // Refresh the list
-          await fetchBillingHistory()
-          return true
-        } else {
-          toast.error(response.message || i18next.t('Failed to complete order'))
-          return false
-        }
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to complete order:', error)
-        toast.error(i18next.t('Failed to complete order'))
-        return false
-      } finally {
-        setCompleting(false)
-      }
+      return response.data
     },
-    [isAdmin, fetchBillingHistory]
-  )
+  })
+
+  const error = query.error
+
+  useEffect(() => {
+    if (!error) return
+
+    // eslint-disable-next-line no-console
+    console.error('Failed to fetch billing history:', error)
+    toast.error(
+      error instanceof Error && error.message
+        ? error.message
+        : i18next.t('Failed to load billing history')
+    )
+  }, [error])
 
   /**
    * Change page
@@ -121,10 +92,8 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     setPage(1) // Reset to first page when searching
   }, [])
 
-  // Fetch data when dependencies change
-  useEffect(() => {
-    fetchBillingHistory()
-  }, [fetchBillingHistory])
+  const records: TopupRecord[] = query.data?.items ?? []
+  const total = query.data?.total ?? 0
 
   return {
     records,
@@ -132,13 +101,10 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     page,
     pageSize,
     keyword,
-    loading,
-    completing,
-    isAdmin,
+    loading: query.isPending,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
-    handleCompleteOrder,
-    refresh: fetchBillingHistory,
+    refresh: query.refetch,
   }
 }

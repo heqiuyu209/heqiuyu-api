@@ -58,7 +58,7 @@ func TelegramBind(c *gin.Context) {
 		return
 	}
 	user.TelegramId = telegramId
-	if err := user.Update(false); err != nil {
+	if err := user.UpdateOAuthBindings(); err != nil {
 		c.JSON(200, gin.H{
 			"message": err.Error(),
 			"success": false,
@@ -95,7 +95,7 @@ func TelegramLogin(c *gin.Context) {
 		})
 		return
 	}
-	setupLogin(&user, c)
+	beginLogin(c, &user)
 }
 
 func checkTelegramAuthorization(params map[string][]string, token string) bool {

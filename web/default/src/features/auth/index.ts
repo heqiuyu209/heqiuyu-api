@@ -82,6 +82,9 @@ export {
   isValidEmail,
 } from './lib/validation'
 
+export { isTwoFactorRequired } from './lib/two-factor'
+export type { TwoFactorChallengePayload } from './lib/two-factor'
+
 // ============================================================================
 // Hooks
 // ============================================================================

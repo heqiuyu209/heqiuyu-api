@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,6 +43,32 @@ func maybeMarkClaudeRefusal(c *gin.Context, stopReason string) {
 	if strings.EqualFold(stopReason, "refusal") {
 		common.SetContextKey(c, constant.ContextKeyAdminRejectReason, "claude_stop_reason=refusal")
 	}
+}
+
+// extensionOfFileName 返回小写扩展名（不含点）；没有扩展名时返回空串。
+func extensionOfFileName(name string) string {
+	idx := strings.LastIndex(name, ".")
+	if idx == -1 || idx+1 >= len(name) {
+		return ""
+	}
+	return strings.ToLower(name[idx+1:])
+}
+
+// decodeBase64FileContent 解码附件内容，兼容带 data: 前缀的 base64 字符串。
+func decodeBase64FileContent(data string) (string, error) {
+	if strings.HasPrefix(data, "data:") {
+		if idx := strings.Index(data, ","); idx != -1 {
+			data = data[idx+1:]
+		}
+	}
+	decoded, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(data)
+		if err != nil {
+			return "", err
+		}
+	}
+	return string(decoded), nil
 }
 
 func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRequest) (*dto.ClaudeRequest, error) {
@@ -375,6 +402,64 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 								Type: "text",
 								Text: common.GetPointer[string](mediaMessage.Text),
 							})
+						}
+					case dto.ContentTypeFile:
+						// 附件必须按类型分流，Claude 只接受图片、PDF 文档与纯文本：
+						//   application/pdf → document（保留 base64）
+						//   text/*          → 解码成 text 块（纯文本当图片发会被上游拒绝）
+						//   image/*         → image（保留 base64）
+						//   其他            → 忽略该附件，不影响同一消息里的其余内容
+						//
+						// 类型判定优先使用**文件名扩展名**（不做内容嗅探）：这样名字与内容
+						// 不一致的附件（例如内容是 PDF 但名为 blob.bin）会被正确忽略。
+						fileMime := ""
+						if file := mediaMessage.GetFile(); file != nil && file.FileName != "" {
+							fileMime = service.GetMimeTypeByExtension(extensionOfFileName(file.FileName))
+						}
+						source := mediaMessage.ToFileSource()
+						if source == nil {
+							continue
+						}
+						base64Data, detectedMime, err := service.GetBase64Data(c, source, "formatting file for Claude")
+						if err != nil {
+							return nil, fmt.Errorf("get file data failed: %s", err.Error())
+						}
+						if fileMime == "" {
+							// 未提供文件名时退回内容嗅探结果，避免丢失既有的图片用例
+							fileMime = detectedMime
+						}
+						switch {
+						case fileMime == "application/pdf":
+							claudeMediaMessages = append(claudeMediaMessages, dto.ClaudeMediaMessage{
+								Type: "document",
+								Source: &dto.ClaudeMessageSource{
+									Type:      "base64",
+									MediaType: fileMime,
+									Data:      base64Data,
+								},
+							})
+						case strings.HasPrefix(fileMime, "text/"):
+							decoded, decodeErr := decodeBase64FileContent(base64Data)
+							if decodeErr != nil {
+								logger.LogError(c, "failed to decode text attachment for Claude: "+decodeErr.Error())
+								continue
+							}
+							claudeMediaMessages = append(claudeMediaMessages, dto.ClaudeMediaMessage{
+								Type: "text",
+								Text: common.GetPointer[string](decoded),
+							})
+						case strings.HasPrefix(fileMime, "image/"):
+							claudeMediaMessages = append(claudeMediaMessages, dto.ClaudeMediaMessage{
+								Type: "image",
+								Source: &dto.ClaudeMessageSource{
+									Type:      "base64",
+									MediaType: fileMime,
+									Data:      base64Data,
+								},
+							})
+						default:
+							// 不支持的附件类型：忽略
+							continue
 						}
 					default:
 						source := mediaMessage.ToFileSource()

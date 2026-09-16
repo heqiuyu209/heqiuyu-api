@@ -170,7 +170,7 @@ func GitHubOAuth(c *gin.Context) {
 		})
 		return
 	}
-	setupLogin(&user, c)
+	beginLogin(c, &user)
 }
 
 func GitHubBind(c *gin.Context) {
@@ -207,7 +207,7 @@ func GitHubBind(c *gin.Context) {
 		return
 	}
 	user.GitHubId = githubUser.Login
-	err = user.Update(false)
+	err = user.UpdateOAuthBindings()
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/setting/console_setting"
 
 	"github.com/gin-gonic/gin"
@@ -21,7 +23,33 @@ const (
 	uptimeKeySuffix  = "_24"
 	apiStatusPath    = "/api/status-page/"
 	apiHeartbeatPath = "/api/status-page/heartbeat/"
+	// uptimeCacheTTL 是状态页结果的进程内缓存时长。
+	// 该接口无需认证，且每次调用都会对外发起 2*len(groups) 个请求，
+	// 因此必须避免匿名请求把它当作放大或内网探测的跳板。
+	uptimeCacheTTL = 30 * time.Second
 )
+
+var uptimeStatusCache = struct {
+	sync.Mutex
+	at      time.Time
+	results []UptimeGroupResult
+}{}
+
+func getCachedUptimeStatus() ([]UptimeGroupResult, bool) {
+	uptimeStatusCache.Lock()
+	defer uptimeStatusCache.Unlock()
+	if uptimeStatusCache.results == nil || time.Since(uptimeStatusCache.at) > uptimeCacheTTL {
+		return nil, false
+	}
+	return uptimeStatusCache.results, true
+}
+
+func setCachedUptimeStatus(results []UptimeGroupResult) {
+	uptimeStatusCache.Lock()
+	defer uptimeStatusCache.Unlock()
+	uptimeStatusCache.results = results
+	uptimeStatusCache.at = time.Now()
+}
 
 type Monitor struct {
 	Name   string  `json:"name"`
@@ -135,10 +163,20 @@ func GetUptimeKumaStatus(c *gin.Context) {
 		return
 	}
 
+	if cached, ok := getCachedUptimeStatus(); ok {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": cached})
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), requestTimeout)
 	defer cancel()
 
-	client := &http.Client{Timeout: httpTimeout}
+	// Uptime Kuma 地址是**管理员**配置的（通常就是自建内网实例），因此不做私网拦截；
+	// 但使用带重定向复查的客户端，而不是裸 http.Client。
+	client := service.GetHttpClient()
+	if client == nil {
+		client = &http.Client{Timeout: httpTimeout}
+	}
 	results := make([]UptimeGroupResult, len(groups))
 
 	g, gCtx := errgroup.WithContext(ctx)
@@ -151,5 +189,6 @@ func GetUptimeKumaStatus(c *gin.Context) {
 	}
 
 	g.Wait()
+	setCachedUptimeStatus(results)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": results})
 }

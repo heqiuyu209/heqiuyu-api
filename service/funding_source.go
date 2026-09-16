@@ -1,10 +1,17 @@
 package service
 
 import (
+	"errors"
+	"fmt"
 	"time"
 
+	"github.com/heqiuyu/heqiuyu-api/logger"
 	"github.com/heqiuyu/heqiuyu-api/model"
 )
+
+// ErrInsufficientWalletQuota 表示钱包余额不足以完成预扣。
+// 调用方（BillingSession.preConsume）据此返回 403 而不是 500。
+var ErrInsufficientWalletQuota = errors.New("insufficient wallet quota")
 
 // ---------------------------------------------------------------------------
 // FundingSource — 资金来源接口（钱包 or 订阅）
@@ -37,8 +44,14 @@ func (w *WalletFunding) PreConsume(amount int) error {
 	if amount <= 0 {
 		return nil
 	}
-	if err := model.DecreaseUserQuota(w.userId, amount, false); err != nil {
+	// 守卫式扣减：数据库层面保证 quota >= amount 才会生效。
+	// 这样并发请求不会因为"各自读到足够余额"而把钱包扣成负数。
+	ok, err := model.DecreaseUserQuotaGuarded(w.userId, amount)
+	if err != nil {
 		return err
+	}
+	if !ok {
+		return fmt.Errorf("%w: need %s", ErrInsufficientWalletQuota, logger.FormatQuota(amount))
 	}
 	w.consumed = amount
 	return nil

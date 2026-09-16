@@ -13,8 +13,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -22,22 +20,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
-
-func OpenBrowser(url string) {
-	var err error
-
-	switch runtime.GOOS {
-	case "linux":
-		err = exec.Command("xdg-open", url).Start()
-	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		err = exec.Command("open", url).Start()
-	}
-	if err != nil {
-		log.Println(err)
-	}
-}
 
 func GetIp() (ip string) {
 	ips, err := net.InterfaceAddrs()

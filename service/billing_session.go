@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -74,8 +75,43 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	if s.funding.Source() == BillingSourceSubscription {
 		s.relayInfo.SubscriptionPostDelta += int64(delta)
 	}
+	// 4) 超额消费安全网：记账如实保留（可能为负），但若透支超过容忍度则立即止损。
+	if s.funding.Source() == BillingSourceWallet {
+		enforceWalletOverspendGuard(s.relayInfo)
+	}
 	s.settled = true
 	return tokenErr
+}
+
+// enforceWalletOverspendGuard 在结算后检查钱包是否被透支到容忍度以下。
+// 若越界，禁用该用户的全部令牌并写入审计日志，避免损失继续放大。
+// 刻意不修改余额：记账必须如实反映实际消耗，止损与告警才是这里的职责。
+func enforceWalletOverspendGuard(relayInfo *relaycommon.RelayInfo) {
+	if relayInfo == nil || relayInfo.IsPlayground || relayInfo.UserId == 0 {
+		return
+	}
+	tolerance := common.GetTrustQuota()
+	if tolerance <= 0 {
+		tolerance = int(common.QuotaPerUnit)
+	}
+	quota, err := model.GetUserQuota(relayInfo.UserId, true)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("overspend guard: failed to read quota for user %d: %s", relayInfo.UserId, err.Error()))
+		return
+	}
+	if quota >= -tolerance {
+		return
+	}
+	common.SysError(fmt.Sprintf("overspend guard: user %d balance %s fell below -%s, disabling all tokens",
+		relayInfo.UserId, logger.FormatQuota(quota), logger.FormatQuota(tolerance)))
+	model.RecordLog(relayInfo.UserId, model.LogTypeSystem,
+		fmt.Sprintf("账户余额透支至 %s，已自动禁用该用户全部令牌，请管理员核查", logger.LogQuota(quota)))
+	affected, err := model.DisableUserTokens(relayInfo.UserId)
+	if err != nil {
+		common.SysError("overspend guard: failed to disable tokens: " + err.Error())
+		return
+	}
+	common.SysError(fmt.Sprintf("overspend guard: disabled %d tokens for user %d", affected, relayInfo.UserId))
 }
 
 // Refund 退还所有预扣费，幂等安全，异步执行。
@@ -187,7 +223,7 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.HeqiuyuErr
 	effectiveQuota := quota
 
 	// ---- 信任额度旁路 ----
-	if s.shouldTrust(c) {
+	if s.shouldTrust(c, quota) {
 		s.trusted = true
 		effectiveQuota = 0
 		logger.LogInfo(c, fmt.Sprintf("用户 %d 额度充足, 信任且不需要预扣费 (funding=%s)", s.relayInfo.UserId, s.funding.Source()))
@@ -212,6 +248,10 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.HeqiuyuErr
 					s.relayInfo.UserId, s.relayInfo.TokenId, s.tokenConsumed, err.Error(), rollbackErr.Error()))
 			}
 			s.tokenConsumed = 0
+		}
+		// 钱包余额不足（守卫式扣减未命中）应返回 403 而不是 500
+		if errors.Is(err, ErrInsufficientWalletQuota) {
+			return types.NewErrorWithStatusCode(err, types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
 		// TODO: model 层应定义哨兵错误（如 ErrNoActiveSubscription），用 errors.Is 替代字符串匹配
 		errMsg := err.Error()
@@ -279,7 +319,10 @@ func (s *BillingSession) reserveToken(delta int) error {
 }
 
 // shouldTrust 统一信任额度检查，适用于钱包和订阅。
-func (s *BillingSession) shouldTrust(c *gin.Context) bool {
+//
+// estimatedQuota 是本次请求的预估消耗。只有"余额在覆盖该预估消耗后仍高于阈值"时才允许旁路；
+// 否则并发请求会各自看到"余额充足"而全部跳过预扣，最后一起结算造成超额消费（审计报告 H4）。
+func (s *BillingSession) shouldTrust(c *gin.Context, estimatedQuota int) bool {
 	// 异步任务（ForcePreConsume=true）必须预扣全额，不允许信任旁路
 	if s.relayInfo.ForcePreConsume {
 		return false
@@ -302,7 +345,10 @@ func (s *BillingSession) shouldTrust(c *gin.Context) bool {
 
 	switch s.funding.Source() {
 	case BillingSourceWallet:
-		return s.relayInfo.UserQuota > trustQuota
+		if estimatedQuota < 0 {
+			estimatedQuota = 0
+		}
+		return s.relayInfo.UserQuota-estimatedQuota > trustQuota
 	case BillingSourceSubscription:
 		// 订阅不能启用信任旁路。原因：
 		// 1. PreConsumeUserSubscription 要求 amount>0 来创建预扣记录并锁定订阅

@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/pkg/taskadaptor"
 	"github.com/heqiuyu/heqiuyu-api/relay/channel"
 	"github.com/heqiuyu/heqiuyu-api/relay/channel/ali"
 	"github.com/heqiuyu/heqiuyu-api/relay/channel/aws"
@@ -130,6 +131,20 @@ func GetTaskPlatform(c *gin.Context) constant.TaskPlatform {
 		return constant.TaskPlatform(strconv.Itoa(channelType))
 	}
 	return constant.TaskPlatform(c.GetString("platform"))
+}
+
+// init 向 pkg/taskadaptor 注册本包作为任务轮询适配器的解析方。
+//
+// 这样 service 侧的轮询只要进程导入了 relay 就能工作，不再依赖 main 包手动注入
+// 全局函数变量（旧方式在缺少注入时会 panic，且依赖方向只存在于运行期）。
+func init() {
+	taskadaptor.RegisterResolver(func(platform constant.TaskPlatform) taskadaptor.TaskPollingAdaptor {
+		a := GetTaskAdaptor(platform)
+		if a == nil {
+			return nil
+		}
+		return a
+	})
 }
 
 func GetTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {

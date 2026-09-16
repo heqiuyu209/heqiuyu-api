@@ -149,14 +149,17 @@ func (p *GitHubProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*O
 	logger.LogDebug(ctx, "[OAuth-GitHub] GetUserInfo success: id=%d, login=%s, name=%s, email=%s",
 		githubUser.Id, githubUser.Login, githubUser.Name, githubUser.Email)
 
+	// 只使用 GitHub 的数字 ID 作为身份标识。
+	//
+	// 刻意不再把 Login（用户名）放进 Extra["legacy_id"]：GitHub 用户名可以被用户改名，
+	// 改名后旧名会被释放供他人抢注。若依据用户名匹配历史账号，攻击者抢注旧名即可
+	// 登录受害者账号（审计报告 H7）。历史遗留的非数字 github_id 需要用户重新绑定，
+	// 见 controller/oauth.go 中的说明。
 	return &OAuthUser{
 		ProviderUserID: strconv.FormatInt(githubUser.Id, 10), // Use numeric ID as primary identifier
 		Username:       githubUser.Login,
 		DisplayName:    githubUser.Name,
 		Email:          githubUser.Email,
-		Extra: map[string]any{
-			"legacy_id": githubUser.Login, // Store login for migration from old accounts
-		},
 	}, nil
 }
 

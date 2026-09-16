@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/constant"
 	"github.com/heqiuyu/heqiuyu-api/dto"
@@ -15,7 +16,6 @@ import (
 	"github.com/heqiuyu/heqiuyu-api/relay/helper"
 	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/types"
-	"github.com/gin-gonic/gin"
 )
 
 func OpenaiTTSHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) *dto.Usage {
@@ -29,9 +29,8 @@ func OpenaiTTSHandler(c *gin.Context, resp *http.Response, info *relaycommon.Rel
 	usage := &dto.Usage{}
 	usage.PromptTokens = info.GetEstimatePromptTokens()
 	usage.TotalTokens = info.GetEstimatePromptTokens()
-	for k, v := range resp.Header {
-		c.Writer.Header().Set(k, v[0])
-	}
+	// 只透传白名单内的端到端响应头，避免上游的 Set-Cookie / CSP / CORS / 逐跳头泄漏给调用方
+	service.CopyRelayResponseHeaders(c.Writer.Header(), resp.Header)
 	c.Writer.WriteHeader(resp.StatusCode)
 
 	if info.IsStream {

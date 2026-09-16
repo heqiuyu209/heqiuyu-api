@@ -112,6 +112,15 @@ func GetRedemptionById(id int) (*Redemption, error) {
 	return &redemption, err
 }
 
+// Redeem 使用兑换码为用户充值。
+//
+// 并发安全依赖"状态 CAS"而不是行锁：
+//   - 旧实现使用 tx.Set("gorm:query_option", "FOR UPDATE")，该键在 GORM v1.25.2 中
+//     根本不存在（只有 clause.Locking 才会产生 FOR UPDATE），因此它既不是错误也不是锁；
+//   - 在 SQLite 下 FOR UPDATE 本身也不存在，即使写对也无法提供互斥。
+//
+// 因此这里先以条件更新抢占兑换码（status = enabled），只有成功抢占（RowsAffected == 1）
+// 的那一次调用才会执行充值，其余并发调用一律失败。
 func Redeem(key string, userId int) (quota int, err error) {
 	if key == "" {
 		return 0, errors.New("未提供兑换码")
@@ -127,8 +136,7 @@ func Redeem(key string, userId int) (quota int, err error) {
 	}
 	common.RandomSleep()
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(keyCol+" = ?", key).First(redemption).Error
-		if err != nil {
+		if err := tx.Where(keyCol+" = ?", key).First(redemption).Error; err != nil {
 			return errors.New("无效的兑换码")
 		}
 		if redemption.Status != common.RedemptionCodeStatusEnabled {
@@ -137,15 +145,31 @@ func Redeem(key string, userId int) (quota int, err error) {
 		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
 			return errors.New("该兑换码已过期")
 		}
-		err = tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error
-		if err != nil {
+
+		// 抢占：仅当仍处于 enabled 时才置为 used。这是唯一的并发互斥点。
+		claim := tx.Model(&Redemption{}).
+			Where("id = ? AND status = ?", redemption.Id, common.RedemptionCodeStatusEnabled).
+			Updates(map[string]interface{}{
+				"status":        common.RedemptionCodeStatusUsed,
+				"redeemed_time": common.GetTimestamp(),
+				"used_user_id":  userId,
+			})
+		if claim.Error != nil {
+			return claim.Error
+		}
+		if claim.RowsAffected != 1 {
+			return errors.New("该兑换码已被使用")
+		}
+
+		// 条件更新足以保证只有一次成功，但余额仍用原子表达式累加。
+		if err := tx.Model(&User{}).Where("id = ?", userId).
+			Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error; err != nil {
 			return err
 		}
 		redemption.RedeemedTime = common.GetTimestamp()
 		redemption.Status = common.RedemptionCodeStatusUsed
 		redemption.UsedUserId = userId
-		err = tx.Save(redemption).Error
-		return err
+		return nil
 	})
 	if err != nil {
 		common.SysError("redemption failed: " + err.Error())

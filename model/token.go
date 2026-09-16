@@ -372,23 +372,27 @@ func DeleteTokenById(id int, userId int) (err error) {
 	return token.Delete()
 }
 
+// IncreaseTokenQuota / DecreaseTokenQuota 同步更新 remain_quota。
+//
+// 与用户余额同理（见 model/user.go IncreaseUserQuota 的注释）：令牌子额度是
+// 转售方用来约束下游预算的硬性上限，必须同步落库并同步更新缓存，否则并发请求
+// 会各自通过"余额足够"的检查后一起扣减，把额度压成负数（审计报告 M11）。
 func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
 	if common.RedisEnabled {
-		gopool.Go(func() {
-			err := cacheIncrTokenQuota(key, int64(quota))
-			if err != nil {
-				common.SysLog("failed to increase token quota: " + err.Error())
-			}
-		})
+		// 同步更新缓存：Redis 是 GetTokenByKey 的首选来源，异步更新会让并发请求读到旧值。
+		if cacheErr := cacheIncrTokenQuota(key, int64(quota)); cacheErr != nil {
+			common.SysLog("failed to increase token quota cache: " + cacheErr.Error())
+		}
 	}
-	if common.BatchUpdateEnabled {
-		addNewRecord(BatchUpdateTypeTokenQuota, tokenId, quota)
-		return nil
+	if err := increaseTokenQuota(tokenId, quota); err != nil && common.RedisEnabled {
+		if cacheErr := cacheDecrTokenQuota(key, int64(quota)); cacheErr != nil {
+			common.SysLog("failed to rollback token quota cache: " + cacheErr.Error())
+		}
 	}
-	return increaseTokenQuota(tokenId, quota)
+	return err
 }
 
 func increaseTokenQuota(id int, quota int) (err error) {
@@ -407,18 +411,16 @@ func DecreaseTokenQuota(id int, key string, quota int) (err error) {
 		return errors.New("quota 不能为负数！")
 	}
 	if common.RedisEnabled {
-		gopool.Go(func() {
-			err := cacheDecrTokenQuota(key, int64(quota))
-			if err != nil {
-				common.SysLog("failed to decrease token quota: " + err.Error())
-			}
-		})
+		if cacheErr := cacheDecrTokenQuota(key, int64(quota)); cacheErr != nil {
+			common.SysLog("failed to decrease token quota cache: " + cacheErr.Error())
+		}
 	}
-	if common.BatchUpdateEnabled {
-		addNewRecord(BatchUpdateTypeTokenQuota, id, -quota)
-		return nil
+	if err := decreaseTokenQuota(id, quota); err != nil && common.RedisEnabled {
+		if cacheErr := cacheIncrTokenQuota(key, int64(quota)); cacheErr != nil {
+			common.SysLog("failed to rollback token quota cache: " + cacheErr.Error())
+		}
 	}
-	return decreaseTokenQuota(id, quota)
+	return err
 }
 
 func decreaseTokenQuota(id int, quota int) (err error) {
@@ -430,6 +432,36 @@ func decreaseTokenQuota(id int, quota int) (err error) {
 		},
 	).Error
 	return err
+}
+
+// DecreaseTokenQuotaGuarded 条件扣减令牌子额度：仅当 remain_quota >= amount 时生效。
+// ok=false 表示额度不足且未做任何修改。预扣费与结算应使用该函数替代"先读后扣"。
+func DecreaseTokenQuotaGuarded(tokenId int, key string, amount int) (ok bool, err error) {
+	if amount < 0 {
+		return false, errors.New("quota 不能为负数！")
+	}
+	if amount == 0 {
+		return true, nil
+	}
+	result := DB.Model(&Token{}).Where("id = ? AND remain_quota >= ?", tokenId, amount).Updates(
+		map[string]interface{}{
+			"remain_quota":  gorm.Expr("remain_quota - ?", amount),
+			"used_quota":    gorm.Expr("used_quota + ?", amount),
+			"accessed_time": common.GetTimestamp(),
+		},
+	)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return false, nil
+	}
+	if common.RedisEnabled {
+		if cacheErr := cacheDecrTokenQuota(key, int64(amount)); cacheErr != nil {
+			common.SysLog("failed to decrease token quota cache: " + cacheErr.Error())
+		}
+	}
+	return true, nil
 }
 
 // CountUserTokens returns total number of tokens for the given user, used for pagination
@@ -508,4 +540,24 @@ func InvalidateUserTokensCache(userId int) error {
 		}
 	}
 	return firstErr
+}
+
+// DisableUserTokens 禁用该用户所有处于启用状态的令牌，返回受影响的行数。
+//
+// 用于超额消费安全网：当账户余额被透支到阈值以下时立即切断后续调用，
+// 避免损失继续放大。同时清理令牌缓存，使禁用立即生效。
+func DisableUserTokens(userId int) (int64, error) {
+	if userId <= 0 {
+		return 0, errors.New("userId 无效")
+	}
+	result := DB.Model(&Token{}).
+		Where("user_id = ? AND status = ?", userId, common.TokenStatusEnabled).
+		Update("status", common.TokenStatusDisabled)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if err := InvalidateUserTokensCache(userId); err != nil {
+		common.SysLog("failed to invalidate user tokens cache: " + err.Error())
+	}
+	return result.RowsAffected, nil
 }

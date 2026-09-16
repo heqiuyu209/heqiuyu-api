@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useAuthStore, type AuthUser } from '@/stores/auth-store'
 import { getSelf } from '@/lib/api'
 import { wechatLoginByCode } from '@/features/auth/api'
+import { isTwoFactorRequired } from '@/features/auth/lib/two-factor'
 
 function OAuthComponent() {
   const navigate = useNavigate()
@@ -19,7 +20,13 @@ function OAuthComponent() {
     ;(async () => {
       try {
         if (search?.provider === 'wechat' && search.code) {
-          await wechatLoginByCode(search.code)
+          const wechatRes = await wechatLoginByCode(search.code)
+          // 2FA challenge: no session was established, continue on the OTP page
+          if (isTwoFactorRequired(wechatRes?.data)) {
+            toast.info(i18next.t('Please enter the authentication code.'))
+            navigate({ to: '/otp', replace: true })
+            return
+          }
         }
         const res = await getSelf()
         if (res?.success) {

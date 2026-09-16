@@ -9,11 +9,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/dto"
 	"github.com/heqiuyu/heqiuyu-api/i18n"
 	"github.com/heqiuyu/heqiuyu-api/logger"
+	"github.com/heqiuyu/heqiuyu-api/middleware"
 	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/setting"
@@ -59,45 +61,32 @@ func Login(c *gin.Context) {
 		case errors.Is(err, model.ErrUserEmptyCredentials):
 			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		default:
+			// 账号维度的失败计数：即使攻击者不断更换 IP（或伪造 X-Forwarded-For）
+			// 也会累积到锁定阈值。
+			middleware.RecordLoginFailure(username)
 			common.ApiErrorI18n(c, i18n.MsgUserUsernameOrPasswordError)
 		}
 		return
 	}
+	// 认证成功：清除该账号的失败计数
+	middleware.ClearLoginFailures(username)
 
-	// 检查是否启用2FA
-	if model.IsTwoFAEnabled(user.Id) {
-		// 设置pending session，等待2FA验证
-		session := sessions.Default(c)
-		session.Set("pending_username", user.Username)
-		session.Set("pending_user_id", user.Id)
-		err := session.Save()
-		if err != nil {
-			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"message": i18n.T(c, i18n.MsgUserRequire2FA),
-			"success": true,
-			"data": map[string]interface{}{
-				"require_2fa": true,
-			},
-		})
-		return
-	}
-
-	setupLogin(&user, c)
+	// 统一入口：内部会判断是否需要 2FA（含 OAuth/Passkey 等所有登录路径）
+	beginLogin(c, &user)
 }
 
-// setup session & cookies and then return user info
+// setupLogin 建立登录态并返回用户信息。
+//
+// 会话里只写 id：角色、状态、分组一律由 middleware.authorize 在每次请求时从数据库
+// （经缓存）读取。这样封禁/降权/删除用户对已登录会话立即生效，而不是等 cookie 过期
+// （最长 30 天）。返回值里仍然带 role/status/group，仅供前端渲染使用。
 func setupLogin(user *model.User, c *gin.Context) {
 	model.UpdateUserLastLoginAt(user.Id)
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
-	session.Set("username", user.Username)
-	session.Set("role", user.Role)
-	session.Set("status", user.Status)
-	session.Set("group", user.Group)
+	// 记录登录时刻：middleware.SensitiveActionGuard 据此判断"是否刚用主凭据认证过"，
+	// 从而允许近期登录的用户登记/撤销 2FA、Passkey 与 access token。
+	session.Set(middleware.SessionLoginAtKey, time.Now().Unix())
 	err := session.Save()
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
@@ -115,6 +104,35 @@ func setupLogin(user *model.User, c *gin.Context) {
 			"group":        user.Group,
 		},
 	})
+}
+
+// beginLogin 是所有登录完成路径的统一入口。
+//
+// 若用户启用了 2FA，则只写入待验证会话并返回 require_2fa，不建立登录态；
+// 否则直接建立登录态。
+//
+// 这一点很关键：旧实现只在"用户名+密码"登录里检查 2FA，OAuth / 微信 / Telegram /
+// Passkey 等路径直接调用 setupLogin，导致启用了 2FA 的用户只要绑定过任一第三方身份
+// 就能完全绕过第二因子（审计报告 M1）。
+func beginLogin(c *gin.Context, user *model.User) {
+	if model.IsTwoFAEnabled(user.Id) {
+		session := sessions.Default(c)
+		session.Set("pending_username", user.Username)
+		session.Set("pending_user_id", user.Id)
+		if err := session.Save(); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": i18n.T(c, i18n.MsgUserRequire2FA),
+			"success": true,
+			"data": map[string]interface{}{
+				"require_2fa": true,
+			},
+		})
+		return
+	}
+	setupLogin(user, c)
 }
 
 func Logout(c *gin.Context) {
@@ -234,7 +252,7 @@ func Register(c *gin.Context) {
 
 func GetAllUsers(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	users, total, err := model.GetAllUsers(pageInfo)
+	users, total, err := model.GetAllUsers(pageInfo, c.GetInt("role"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -251,7 +269,7 @@ func SearchUsers(c *gin.Context) {
 	keyword := c.Query("keyword")
 	group := c.Query("group")
 	pageInfo := common.GetPageQuery(c)
-	users, total, err := model.SearchUsers(keyword, group, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	users, total, err := model.SearchUsers(keyword, group, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), c.GetInt("role"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -309,7 +327,7 @@ func GenerateAccessToken(c *gin.Context) {
 		return
 	}
 
-	if err := user.Update(false); err != nil {
+	if err := user.UpdateAccessToken(key); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -355,7 +373,7 @@ func GetAffCode(c *gin.Context) {
 	}
 	if user.AffCode == "" {
 		user.AffCode = common.GetRandomString(4)
-		if err := user.Update(false); err != nil {
+		if err := user.UpdateAffCode(user.AffCode); err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": err.Error(),
@@ -650,7 +668,7 @@ func UpdateSelf(c *gin.Context) {
 
 		// 保存更新后的设置
 		user.SetSetting(currentSetting)
-		if err := user.Update(false); err != nil {
+		if err := user.UpdateSetting(user.Setting); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgUpdateFailed)
 			return
 		}
@@ -678,7 +696,7 @@ func UpdateSelf(c *gin.Context) {
 
 		// 保存更新后的设置
 		user.SetSetting(currentSetting)
-		if err := user.Update(false); err != nil {
+		if err := user.UpdateSetting(user.Setting); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgUpdateFailed)
 			return
 		}
@@ -723,7 +741,7 @@ func UpdateSelf(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if err := cleanUser.Update(updatePassword); err != nil {
+	if err := cleanUser.UpdateProfile(updatePassword); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -773,12 +791,22 @@ func DeleteUser(c *gin.Context) {
 	}
 	err = model.HardDeleteUserById(id)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "",
-		})
+		common.ApiError(c, err)
 		return
 	}
+	// 硬删除后立即清理缓存：否则该用户的会话与令牌会在缓存 TTL 内继续可用。
+	// 即使未启用 Redis，鉴权中间件回查数据库发现记录不存在也会立刻拒绝其旧会话。
+	if err := model.InvalidateUserCache(id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate user cache for deleted user %d: %s", id, err.Error()))
+	}
+	if err := model.InvalidateUserTokensCache(id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for deleted user %d: %s", id, err.Error()))
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+	})
+	return
 }
 
 func DeleteSelf(c *gin.Context) {
@@ -794,6 +822,12 @@ func DeleteSelf(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if err := model.InvalidateUserCache(id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate user cache for deleted user %d: %s", id, err.Error()))
+	}
+	if err := model.InvalidateUserTokensCache(id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for deleted user %d: %s", id, err.Error()))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -966,21 +1000,29 @@ func ManageUser(c *gin.Context) {
 		return
 	}
 
-	if err := user.Update(false); err != nil {
+	// 只写入本次动作真正改变的列。
+	// 旧实现在这里调用 user.Update(false)，会用早先读到的整行快照覆盖 quota / used_quota /
+	// 分组等字段，正好落在计费结算的时间窗口里就会把那次扣费回滚（审计报告 H3）。
+	columns := map[string]interface{}{}
+	switch req.Action {
+	case "disable", "enable":
+		columns["status"] = user.Status
+	case "promote", "demote":
+		columns["role"] = user.Role
+	}
+	if err := user.UpdateAdminFields(columns); err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	// 禁用 / 角色调整后，强制失效用户缓存与其全部令牌缓存，
+	// 角色或状态变更后，强制失效用户缓存与其全部令牌缓存，
 	// 避免在 Redis TTL 过期前仍使用旧状态（尤其是禁用后仍可发起请求的问题）。
 	// InvalidateUserCache 会让下一次 GetUserCache 从数据库重新加载，
-	// InvalidateUserTokensCache 则确保令牌侧的缓存也同步刷新。
-	if req.Action == "disable" || req.Action == "promote" || req.Action == "demote" {
-		if err := model.InvalidateUserCache(user.Id); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d: %s", user.Id, err.Error()))
-		}
-		if err := model.InvalidateUserTokensCache(user.Id); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
-		}
+	// 鉴权中间件每次请求都读它，因此降权/封禁对已登录会话立即生效。
+	if err := model.InvalidateUserCache(user.Id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d: %s", user.Id, err.Error()))
+	}
+	if err := model.InvalidateUserTokensCache(user.Id); err != nil {
+		common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
 	}
 	clearUser := model.User{
 		Role:   user.Role,
@@ -1023,7 +1065,7 @@ func EmailBind(c *gin.Context) {
 	}
 	user.Email = email
 	// no need to check if this email already taken, because we have used verification code to check it
-	err = user.Update(false)
+	err = user.UpdateEmail(email)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -1108,6 +1150,21 @@ func TopUp(c *gin.Context) {
 		"message": "",
 		"data":    quota,
 	})
+}
+
+// GetUserTopUpsSelf 返回当前用户自己的充值（兑换码）流水。
+// 只按会话中的用户 ID 过滤，不接受任何来自请求的用户 ID 参数。
+func GetUserTopUpsSelf(c *gin.Context) {
+	userId := c.GetInt("id")
+	pageInfo := common.GetPageQuery(c)
+	topups, total, err := model.GetUserTopUps(userId, pageInfo)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(topups)
+	common.ApiSuccess(c, pageInfo)
 }
 
 type UpdateUserSettingRequest struct {
@@ -1259,7 +1316,7 @@ func UpdateUserSetting(c *gin.Context) {
 
 	// 更新用户设置
 	user.SetSetting(settings)
-	if err := user.Update(false); err != nil {
+	if err := user.UpdateSetting(user.Setting); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUpdateFailed)
 		return
 	}

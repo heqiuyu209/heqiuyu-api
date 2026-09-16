@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/gin-gonic/gin"
+	"github.com/heqiuyu/heqiuyu-api/common"
 
 	"github.com/heqiuyu/heqiuyu-api/constant"
 	"github.com/heqiuyu/heqiuyu-api/dto"
@@ -171,7 +171,9 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	var vResp responsePayload
 	err = common.Unmarshal(responseBody, &vResp)
 	if err != nil {
-		taskErr = service.TaskErrorWrapper(errors.Wrap(err, fmt.Sprintf("%s", responseBody)), "unmarshal_response_failed", http.StatusInternalServerError)
+		// 上游响应体只写服务端日志，客户端只返回脱敏后的简短错误
+		common.SysLog(fmt.Sprintf("vidu unmarshal response body failed: %s, body: %s", err.Error(), string(responseBody)))
+		taskErr = service.TaskErrorWrapper(errors.Wrap(err, "unmarshal response body failed"), "unmarshal_response_failed", http.StatusInternalServerError)
 		return
 	}
 

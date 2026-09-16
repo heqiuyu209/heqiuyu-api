@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/middleware"
 	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -118,6 +119,8 @@ func UniversalVerify(c *gin.Context) {
 	}
 
 	if !verified {
+		// 账号维度的失败计数：阻止通过更换 IP 绕过二次验证的爆破
+		middleware.RecordLoginFailureByUserID(userId)
 		common.ApiError(c, fmt.Errorf("验证失败，请检查验证码"))
 		return
 	}
@@ -128,6 +131,7 @@ func UniversalVerify(c *gin.Context) {
 		common.ApiError(c, fmt.Errorf("保存验证状态失败: %v", err))
 		return
 	}
+	middleware.ClearLoginFailuresByUserID(userId)
 
 	// 记录日志
 	model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("通用安全验证成功 (验证方式: %s)", verifyMethod))

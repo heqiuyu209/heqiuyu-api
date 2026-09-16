@@ -40,6 +40,7 @@ import { OAuthProviders } from '@/features/auth/components/oauth-providers'
 import { loginFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
+import { isTwoFactorRequired } from '@/features/auth/lib/two-factor'
 import { beginPasskeyLogin, finishPasskeyLogin } from '@/features/auth/passkey'
 import type { AuthFormProps } from '@/features/auth/types'
 
@@ -58,6 +59,7 @@ export function UserAuthForm({
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
   const loginFailedMessage = t('Login failed')
+  const twoFactorRequiredMessage = t('Please enter the authentication code.')
 
   const { status } = useStatus()
   const passkeyLoginEnabled = Boolean(
@@ -134,7 +136,7 @@ export function UserAuthForm({
       })
 
       if (res.success) {
-        if (res.data?.require_2fa) {
+        if (isTwoFactorRequired(res.data)) {
           redirectTo2FA()
           return
         }
@@ -176,6 +178,13 @@ export function UserAuthForm({
     try {
       const res = await wechatLoginByCode(wechatCode)
       if (res?.success) {
+        if (isTwoFactorRequired(res.data)) {
+          toast.info(twoFactorRequiredMessage)
+          handleWeChatDialogChange(false)
+          redirectTo2FA()
+          return
+        }
+
         await handleLoginSuccess(res.data as { id?: number } | null, redirectTo)
         toast.success(t('Signed in via WeChat'))
         handleWeChatDialogChange(false)
@@ -233,6 +242,12 @@ export function UserAuthForm({
       const finish = await finishPasskeyLogin(assertion)
       if (!finish.success) {
         throw new Error(finish.message || t('Failed to complete Passkey login'))
+      }
+
+      if (isTwoFactorRequired(finish.data)) {
+        toast.info(twoFactorRequiredMessage)
+        redirectTo2FA()
+        return
       }
 
       if (!finish.data) {

@@ -12,6 +12,7 @@ import { useAuthStore, type AuthUser } from '@/stores/auth-store'
 import { api, getSelf } from '@/lib/api'
 import { OAuthCallbackScreen } from '@/features/auth/components/oauth-callback-screen'
 import { OAUTH_BIND_STORAGE_KEY } from '@/features/auth/constants'
+import { isTwoFactorRequired } from '@/features/auth/lib/two-factor'
 
 type OAuthRequestConfig = AxiosRequestConfig & {
   skipBusinessError?: boolean
@@ -163,6 +164,14 @@ function OAuthCallback() {
             } else {
               safeNavigate('/_authenticated/profile/')
             }
+            return
+          }
+          // The account has 2FA enabled: the backend did not establish a
+          // session, it only stored the pending user in the session. Hand the
+          // user over to the same OTP step the password login uses.
+          if (isTwoFactorRequired(loginUser)) {
+            toast.info(i18next.t('Please enter the authentication code.'))
+            safeNavigate('/otp')
             return
           }
           // Otherwise it's a login, use payload user if available

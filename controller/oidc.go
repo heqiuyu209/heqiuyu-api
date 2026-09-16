@@ -178,7 +178,7 @@ func OidcAuth(c *gin.Context) {
 		})
 		return
 	}
-	setupLogin(&user, c)
+	beginLogin(c, &user)
 }
 
 func OidcBind(c *gin.Context) {
@@ -215,7 +215,7 @@ func OidcBind(c *gin.Context) {
 		return
 	}
 	user.OidcId = oidcUser.OpenID
-	err = user.Update(false)
+	err = user.UpdateOAuthBindings()
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -40,8 +40,14 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		return
 	}
 
-	// 无条件新建 StreamStatus
-	info.StreamStatus = relaycommon.NewStreamStatus()
+	// 仅在未初始化时创建 StreamStatus。
+	//
+	// 旧实现是无条件覆盖，会把调用方已经记录的状态与错误丢掉
+	// （stream_scanner_test.go 的 InitializedIfNil / PreInitialized 两个用例
+	// 共同定义了"为 nil 才初始化，否则保留"的契约）。
+	if info.StreamStatus == nil {
+		info.StreamStatus = relaycommon.NewStreamStatus()
+	}
 
 	// 确保响应体总是被关闭
 	defer func() {
@@ -55,11 +61,21 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	var (
 		stopChan   = make(chan bool, 3) // 增加缓冲区避免阻塞
 		scanner    = bufio.NewScanner(resp.Body)
-		ticker     = time.NewTicker(streamingTimeout)
 		pingTicker *time.Ticker
 		writeMutex sync.Mutex     // Mutex to protect concurrent writes
 		wg         sync.WaitGroup // 用于等待所有 goroutine 退出
 	)
+
+	// 流式超时看门狗是可选的：streamingTimeout <= 0 表示"不限制超时"
+	// （STREAMING_TIMEOUT=0 是常见配置）。time.NewTicker 不接受非正数，会直接 panic，
+	// 因此禁用时不创建 ticker，并用 nil channel 让下面的 select 永不命中超时分支
+	// （nil channel 在 select 中永远阻塞）。
+	var timeoutTicker *time.Ticker
+	var timeoutChan <-chan time.Time
+	if streamingTimeout > 0 {
+		timeoutTicker = time.NewTicker(streamingTimeout)
+		timeoutChan = timeoutTicker.C
+	}
 
 	generalSettings := operation_setting.GetGeneralSetting()
 	pingEnabled := generalSettings.PingIntervalEnabled && !info.DisablePing
@@ -77,7 +93,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		// 通知所有 goroutine 停止
 		common.SafeSendBool(stopChan, true)
 
-		ticker.Stop()
+		if timeoutTicker != nil {
+			timeoutTicker.Stop()
+		}
 		if pingTicker != nil {
 			pingTicker.Stop()
 		}
@@ -217,7 +235,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			default:
 			}
 
-			ticker.Reset(streamingTimeout)
+			if timeoutTicker != nil {
+				timeoutTicker.Reset(streamingTimeout)
+			}
 			data := scanner.Text()
 
 			if len(data) < 6 {
@@ -257,9 +277,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonEOF, nil)
 	})
 
-	// 主循环等待完成或超时
+	// 主循环等待完成或超时（timeoutChan 为 nil 时该分支永不触发，即不限制超时）
 	select {
-	case <-ticker.C:
+	case <-timeoutChan:
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonTimeout, nil)
 	case <-stopChan:
 		// EndReason already set by the goroutine that triggered stopChan

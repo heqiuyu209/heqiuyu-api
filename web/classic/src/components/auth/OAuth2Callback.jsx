@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import {
   API,
   showError,
+  showInfo,
   showSuccess,
   updateAPI,
   setUserData,
@@ -53,6 +54,14 @@ const OAuth2Callback = (props) => {
       if (!success) {
         // 业务错误不重试，直接显示错误
         showError(message || t('授权失败'));
+        return;
+      }
+
+      // 账号启用了两步验证：后端没有建立登录态，只写入了待验证会话。
+      // 回到登录页由两步验证弹窗完成第二因子。
+      if (data?.require_2fa) {
+        showInfo(t('为了保护账户安全，请验证您的两步验证码。'));
+        navigate('/login?require_2fa=1');
         return;
       }
 

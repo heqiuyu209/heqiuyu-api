@@ -194,6 +194,14 @@ const RegisterForm = () => {
       );
       const { success, message, data } = res.data;
       if (success) {
+        // 账号启用了两步验证：后端未建立登录态，回到登录页完成第二因子
+        if (data?.require_2fa) {
+          setShowWeChatLoginModal(false);
+          showInfo(t('为了保护账户安全，请验证您的两步验证码。'));
+          navigate('/login?require_2fa=1');
+          return;
+        }
+
         userDispatch({ type: 'login', payload: data });
         localStorage.setItem('user', JSON.stringify(data));
         setUserData(data);
@@ -377,6 +385,13 @@ const RegisterForm = () => {
       const res = await API.get(`/api/oauth/telegram/login`, { params });
       const { success, message, data } = res.data;
       if (success) {
+        // 账号启用了两步验证：后端未建立登录态，回到登录页完成第二因子
+        if (data?.require_2fa) {
+          showInfo(t('为了保护账户安全，请验证您的两步验证码。'));
+          navigate('/login?require_2fa=1');
+          return;
+        }
+
         userDispatch({ type: 'login', payload: data });
         localStorage.setItem('user', JSON.stringify(data));
         showSuccess('登录成功！');

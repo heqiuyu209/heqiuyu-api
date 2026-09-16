@@ -329,6 +329,35 @@ func (p *SSRFProtection) ValidateURL(urlStr string) error {
 	return nil
 }
 
+// ValidateIPWithFetchSetting 使用与 ValidateURL 完全相同的策略校验单个已解析的 IP。
+//
+// 这是为了在**建立连接时**（而不是仅在解析 URL 时）再次执行策略：仅在请求前解析一次
+// 域名会留下 DNS 重绑定窗口——校验时域名解析到公网地址，实际连接时却解析到内网地址
+// （审计报告 M3）。
+func ValidateIPWithFetchSetting(ip net.IP, enableSSRFProtection, allowPrivateIp bool, ipFilterMode bool, ipList []string) error {
+	if !enableSSRFProtection {
+		return nil
+	}
+	if ip == nil {
+		return fmt.Errorf("invalid IP address")
+	}
+	p := &SSRFProtection{
+		AllowPrivateIp: allowPrivateIp,
+		IpFilterMode:   ipFilterMode,
+		IpList:         ipList,
+	}
+	if !p.IsIPAccessAllowed(ip) {
+		if isPrivateIP(ip) && !allowPrivateIp {
+			return fmt.Errorf("private IP address not allowed: %s", ip.String())
+		}
+		if ipFilterMode {
+			return fmt.Errorf("ip not in whitelist: %s", ip.String())
+		}
+		return fmt.Errorf("ip in blacklist: %s", ip.String())
+	}
+	return nil
+}
+
 // ValidateURLWithFetchSetting 使用FetchSetting配置验证URL
 func ValidateURLWithFetchSetting(urlStr string, enableSSRFProtection, allowPrivateIp bool, domainFilterMode bool, ipFilterMode bool, domainList, ipList, allowedPorts []string, applyIPFilterForDomain bool) error {
 	// 如果SSRF防护被禁用，直接返回成功

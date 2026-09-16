@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/constant"
 	"github.com/heqiuyu/heqiuyu-api/dto"
@@ -19,7 +20,6 @@ import (
 	relayconstant "github.com/heqiuyu/heqiuyu-api/relay/constant"
 	"github.com/heqiuyu/heqiuyu-api/relay/helper"
 	"github.com/heqiuyu/heqiuyu-api/service"
-	"github.com/gin-gonic/gin"
 )
 
 type TaskSubmitResult struct {
@@ -223,7 +223,9 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 	if resp != nil && resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
-		return nil, service.TaskErrorWrapper(fmt.Errorf("%s", string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
+		// 上游响应体只写服务端日志，客户端只返回脱敏后的简短错误
+		common.SysLog(fmt.Sprintf("task submit failed with status %d, body: %s", resp.StatusCode, string(responseBody)))
+		return nil, service.TaskErrorWrapper(fmt.Errorf("upstream returned status code %d", resp.StatusCode), "fail_to_fetch_task", resp.StatusCode)
 	}
 
 	// 10. 返回 OtherRatios 给下游（header 必须在 DoResponse 写 body 之前设置）

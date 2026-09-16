@@ -12,6 +12,7 @@ import (
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/heqiuyu/heqiuyu-api/oauth"
+	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -176,7 +177,9 @@ func FetchCustomOAuthDiscovery(c *gin.Context) {
 	}
 	httpReq.Header.Set("Accept", "application/json")
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	// 保留 20 秒超时，同时套用统一的重定向策略（逐跳复查 SSRF 策略），
+	// 避免裸客户端无条件跟随重定向绕过校验。
+	client := &http.Client{Timeout: 20 * time.Second, CheckRedirect: service.CheckRedirectPolicy}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		common.ApiErrorMsg(c, "获取 Discovery 配置失败: "+err.Error())

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/middleware"
 	"github.com/heqiuyu/heqiuyu-api/model"
 
 	"github.com/gin-contrib/sessions"
@@ -470,6 +471,8 @@ func Verify2FALogin(c *gin.Context) {
 	}
 
 	if !isValidTOTP && !isValidBackup {
+		// 账号维度的失败计数：即使攻击者不断更换 IP，也会累积到锁定阈值
+		middleware.RecordLoginFailureByUserID(user.Id)
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "验证码或备用码错误，请重试",
@@ -478,6 +481,7 @@ func Verify2FALogin(c *gin.Context) {
 	}
 
 	// 2FA验证成功，清理pending会话信息并完成登录
+	middleware.ClearLoginFailuresByUserID(user.Id)
 	session.Delete("pending_username")
 	session.Delete("pending_user_id")
 	session.Save()

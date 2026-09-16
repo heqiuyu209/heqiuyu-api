@@ -60,15 +60,19 @@ func MidjourneyErrorWithStatusCodeWrapper(code int, desc string, statusCode int)
 
 func ClaudeErrorWrapper(err error, code string, statusCode int) *dto.ClaudeErrorWithStatusCode {
 	text := err.Error()
+	// 客户端可见的错误文本一律脱敏（默认拒绝），避免上游回显的密钥/地址泄漏；
+	// 连接类失败（post/dial/http）额外替换为通用提示，不向客户端暴露上游地址。
+	// 原始错误始终写入服务端日志。
+	message := common.MaskSensitiveInfo(text)
 	lowerText := strings.ToLower(text)
-	if !strings.HasPrefix(lowerText, "get file base64 from url") {
-		if strings.Contains(lowerText, "post") || strings.Contains(lowerText, "dial") || strings.Contains(lowerText, "http") {
-			common.SysLog(fmt.Sprintf("error: %s", text))
-			text = "请求上游地址失败"
-		}
+	if strings.Contains(lowerText, "post") || strings.Contains(lowerText, "dial") || strings.Contains(lowerText, "http") {
+		message = "请求上游地址失败"
+	}
+	if message != text {
+		common.SysLog(fmt.Sprintf("error: %s", text))
 	}
 	claudeError := types.ClaudeError{
-		Message: text,
+		Message: message,
 		Type:    "heqiuyu_api_error",
 	}
 	return &dto.ClaudeErrorWithStatusCode{
@@ -190,16 +194,15 @@ func TaskErrorWrapperLocal(err error, code string, statusCode int) *dto.TaskErro
 
 func TaskErrorWrapper(err error, code string, statusCode int) *dto.TaskError {
 	text := err.Error()
-	lowerText := strings.ToLower(text)
-	if strings.Contains(lowerText, "post") || strings.Contains(lowerText, "dial") || strings.Contains(lowerText, "http") {
+	// 客户端可见的错误文本无条件脱敏（deny-by-default），避免上游在错误里回显密钥或内部地址；
+	// 原始错误通过 Error 字段保留给服务端日志（该字段不参与 JSON 序列化）。
+	maskedText := common.MaskSensitiveInfo(text)
+	if maskedText != text {
 		common.SysLog(fmt.Sprintf("error: %s", text))
-		//text = "请求上游地址失败"
-		text = common.MaskSensitiveInfo(text)
 	}
-	//避免暴露内部错误
 	taskError := &dto.TaskError{
 		Code:       code,
-		Message:    text,
+		Message:    maskedText,
 		StatusCode: statusCode,
 		Error:      err,
 	}
@@ -212,9 +215,10 @@ func TaskErrorFromAPIError(apiErr *types.HeqiuyuError) *dto.TaskError {
 	if apiErr == nil {
 		return nil
 	}
+	// Message 会直接返回给客户端，因此与 TaskErrorWrapper 一样无条件脱敏。
 	return &dto.TaskError{
 		Code:       string(apiErr.GetErrorCode()),
-		Message:    apiErr.Err.Error(),
+		Message:    common.MaskSensitiveInfo(apiErr.Error()),
 		StatusCode: apiErr.StatusCode,
 		Error:      apiErr.Err,
 	}

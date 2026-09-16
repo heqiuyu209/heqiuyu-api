@@ -21,7 +21,7 @@ const defaultRequestLimitsSettings: RequestLimitsSettings = {
   'fetch_setting.domain_list': [],
   'fetch_setting.ip_list': [],
   'fetch_setting.allowed_ports': [],
-  'fetch_setting.apply_ip_filter_for_domain': false,
+  'fetch_setting.apply_ip_filter_for_domain': true,
 }
 
 export function RequestLimitsSettings() {

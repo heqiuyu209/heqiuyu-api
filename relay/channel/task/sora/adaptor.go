@@ -236,7 +236,9 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	// Parse Sora response
 	var dResp responseTask
 	if err := common.Unmarshal(responseBody, &dResp); err != nil {
-		taskErr = service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
+		// 上游响应体只写服务端日志，客户端只返回脱敏后的简短错误
+		common.SysLog(fmt.Sprintf("sora unmarshal response body failed: %s, body: %s", err.Error(), string(responseBody)))
+		taskErr = service.TaskErrorWrapper(errors.Wrap(err, "unmarshal response body failed"), "unmarshal_response_body_failed", http.StatusInternalServerError)
 		return
 	}
 

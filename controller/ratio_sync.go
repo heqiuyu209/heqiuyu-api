@@ -21,6 +21,7 @@ import (
 
 	"github.com/heqiuyu/heqiuyu-api/dto"
 	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/setting/billing_setting"
 	"github.com/heqiuyu/heqiuyu-api/setting/ratio_setting"
 	"github.com/samber/lo"
@@ -215,7 +216,9 @@ func FetchUpstreamRatios(c *gin.Context) {
 		}
 		return dialer.DialContext(ctx, network, addr)
 	}
-	client := &http.Client{Transport: transport}
+	// 保留自定义拨号（github.io 优先 IPv4），但必须复用统一的重定向策略，
+	// 否则该抓取会无条件跟随重定向而绕过请求前的 URL 校验。
+	client := &http.Client{Transport: transport, CheckRedirect: service.CheckRedirectPolicy}
 
 	for _, chn := range upstreams {
 		wg.Add(1)

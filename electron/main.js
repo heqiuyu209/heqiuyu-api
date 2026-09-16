@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const crypto = require('crypto');
 
 let mainWindow;
 let serverProcess;
@@ -219,6 +220,58 @@ function checkServerAvailability(port, maxRetries = 30, retryDelay = 1000) {
   });
 }
 
+// 读取或生成持久化的服务端密钥（会话签名密钥 + 派生密钥）。
+//
+// 桌面版必须自行提供这两个变量：后端在 DEBUG != true 时会拒绝在缺少
+// SESSION_SECRET / CRYPTO_SECRET 的情况下启动（之前桌面版因此完全无法启动）。
+// 密钥保存在 userData 目录，保证重启后会话与派生值保持稳定。
+function loadOrCreateSecrets(userDataPath) {
+  const secretsPath = path.join(userDataPath, 'secrets.env');
+  const secrets = {};
+
+  if (fs.existsSync(secretsPath)) {
+    try {
+      for (const line of fs.readFileSync(secretsPath, 'utf8').split('\n')) {
+        const idx = line.indexOf('=');
+        if (idx > 0) {
+          secrets[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to read secrets file:', err);
+    }
+  }
+
+  const ensure = (name) => {
+    const current = secrets[name];
+    if (typeof current === 'string' && current.length >= 32) {
+      return current;
+    }
+    return crypto.randomBytes(48).toString('base64');
+  };
+
+  secrets.SESSION_SECRET = ensure('SESSION_SECRET');
+  let cryptoSecret = ensure('CRYPTO_SECRET');
+  // 两个密钥必须不同，否则一个密钥泄露会同时危及会话签名与派生值。
+  if (secrets.SESSION_SECRET === cryptoSecret) {
+    cryptoSecret = crypto.randomBytes(48).toString('base64');
+  }
+  secrets.CRYPTO_SECRET = cryptoSecret;
+
+  try {
+    fs.mkdirSync(userDataPath, { recursive: true });
+    fs.writeFileSync(
+      secretsPath,
+      `SESSION_SECRET=${secrets.SESSION_SECRET}\nCRYPTO_SECRET=${secrets.CRYPTO_SECRET}\n`,
+      { mode: 0o600 }
+    );
+  } catch (err) {
+    console.error('Failed to persist secrets file:', err);
+  }
+
+  return secrets;
+}
+
 function startServer() {
   return new Promise((resolve, reject) => {
     const isDev = process.env.NODE_ENV === 'development';
@@ -255,7 +308,15 @@ function startServer() {
     }
 
     // 生产模式：启动二进制服务器
-    const env = { ...process.env, PORT: PORT.toString() };
+    // 后端要求显式提供 SESSION_SECRET / CRYPTO_SECRET，否则会直接退出，
+    // 因此这里必须注入持久化的密钥（用户已设置的环境变量优先）。
+    const secrets = loadOrCreateSecrets(userDataPath);
+    const env = {
+      ...process.env,
+      PORT: PORT.toString(),
+      SESSION_SECRET: process.env.SESSION_SECRET || secrets.SESSION_SECRET,
+      CRYPTO_SECRET: process.env.CRYPTO_SECRET || secrets.CRYPTO_SECRET,
+    };
 
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });

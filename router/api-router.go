@@ -47,13 +47,15 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)
 
 		// Universal secure verification routes
-		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.UniversalVerify)
+		apiRouter.POST("/verify", middleware.UserAuth(), middleware.LoginRateLimit(), middleware.CriticalRateLimit(), controller.UniversalVerify)
 
 		userRoute := apiRouter.Group("/user")
 		{
 			userRoute.POST("/register", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Register)
-			userRoute.POST("/login", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Login)
-			userRoute.POST("/login/2fa", middleware.CriticalRateLimit(), controller.Verify2FALogin)
+			// LoginRateLimit 按账号计数（与 IP 无关），是对可被 X-Forwarded-For 绕过的
+			// CriticalRateLimit 的必要补充。
+			userRoute.POST("/login", middleware.LoginRateLimit(), middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Login)
+			userRoute.POST("/login/2fa", middleware.LoginRateLimit(), middleware.CriticalRateLimit(), controller.Verify2FALogin)
 			userRoute.POST("/passkey/login/begin", middleware.CriticalRateLimit(), controller.PasskeyLoginBegin)
 			userRoute.POST("/passkey/login/finish", middleware.CriticalRateLimit(), controller.PasskeyLoginFinish)
 			//userRoute.POST("/tokenlog", middleware.CriticalRateLimit(), controller.TokenLog)
@@ -68,23 +70,29 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.PUT("/self", controller.UpdateSelf)
 				selfRoute.DELETE("/self", controller.DeleteSelf)
-				selfRoute.GET("/token", controller.GenerateAccessToken)
+				selfRoute.GET("/token", middleware.SensitiveActionGuard(), controller.GenerateAccessToken)
 				selfRoute.GET("/passkey", controller.PasskeyStatus)
-				selfRoute.POST("/passkey/register/begin", controller.PasskeyRegisterBegin)
-				selfRoute.POST("/passkey/register/finish", controller.PasskeyRegisterFinish)
+				// 以下操作会登记或撤销登录凭据，因此要求"近期登录过"或"刚通过第二因子验证"，
+				// 防止会话被窃取后攻击者给自己登记持久凭据，或把受害者锁在账号外（审计报告 M2）。
+				selfRoute.POST("/passkey/register/begin", middleware.SensitiveActionGuard(), controller.PasskeyRegisterBegin)
+				selfRoute.POST("/passkey/register/finish", middleware.SensitiveActionGuard(), controller.PasskeyRegisterFinish)
 				selfRoute.POST("/passkey/verify/begin", controller.PasskeyVerifyBegin)
 				selfRoute.POST("/passkey/verify/finish", controller.PasskeyVerifyFinish)
-				selfRoute.DELETE("/passkey", controller.PasskeyDelete)
+				selfRoute.DELETE("/passkey", middleware.SensitiveActionGuard(), controller.PasskeyDelete)
 				selfRoute.GET("/aff", controller.GetAffCode)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
+				// 兑换码充值与其自身流水：钱包页面在调用这两个接口，
+				// 之前它们没有注册路由，导致前端功能 404（审计报告 D1）。
+				selfRoute.POST("/topup", middleware.CriticalRateLimit(), controller.TopUp)
+				selfRoute.GET("/topup/self", controller.GetUserTopUpsSelf)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 
-				// 2FA routes
+				// 2FA routes（同样属于凭据变更，受 SensitiveActionGuard 保护）
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)
-				selfRoute.POST("/2fa/setup", controller.Setup2FA)
-				selfRoute.POST("/2fa/enable", controller.Enable2FA)
-				selfRoute.POST("/2fa/disable", controller.Disable2FA)
-				selfRoute.POST("/2fa/backup_codes", controller.RegenerateBackupCodes)
+				selfRoute.POST("/2fa/setup", middleware.SensitiveActionGuard(), controller.Setup2FA)
+				selfRoute.POST("/2fa/enable", middleware.SensitiveActionGuard(), controller.Enable2FA)
+				selfRoute.POST("/2fa/disable", middleware.SensitiveActionGuard(), controller.Disable2FA)
+				selfRoute.POST("/2fa/backup_codes", middleware.SensitiveActionGuard(), controller.RegenerateBackupCodes)
 
 				// Check-in routes
 				selfRoute.GET("/checkin", controller.GetCheckinStatus)

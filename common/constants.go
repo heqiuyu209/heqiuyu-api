@@ -147,6 +147,20 @@ var SyncFrequency int // unit is second
 var BatchUpdateEnabled = false
 var BatchUpdateInterval int
 
+// TrustQuotaEnabled controls the "trusted quota" pre-consume bypass.
+// 安全默认：关闭。开启后，余额高于 TrustQuota 的账户在发起请求时不会被预扣费，
+// 这使得同一账户可以用并发请求在结算前超额消费（见审计报告 H4），因此仅在明确
+// 理解该风险时才应开启。
+var TrustQuotaEnabled = false
+
+// TrustQuota is the balance threshold used when TrustQuotaEnabled is true.
+var TrustQuota int
+
+// ChannelBaseURLStrict 为 true 时对渠道 base_url 应用 SSRF 策略（拒绝私网/回环地址等）。
+// 默认关闭：自建内网网关（如 http://ollama:11434）是正当用法，一刀切会打断部署。
+// 真正的控制点是"谁能修改渠道的出站目标"（见 controller.UpdateChannel 的 root + 二次验证门禁）。
+var ChannelBaseURLStrict = false
+
 var RelayTimeout int // unit is second
 
 var RelayMaxIdleConns int
@@ -204,6 +218,13 @@ var (
 	SearchRateLimitEnable         = true
 	SearchRateLimitNum            = 10
 	SearchRateLimitDuration int64 = 60
+
+	// Account-scoped login failure lockout. Keyed by account (username / user ID)
+	// rather than by client IP, so it cannot be bypassed by spoofing
+	// X-Forwarded-For. See middleware.LoginRateLimit.
+	LoginRateLimitEnable         = true
+	LoginRateLimitNum            = 10
+	LoginRateLimitDuration int64 = 15 * 60
 )
 
 var RateLimitKeyExpirationDuration = 20 * time.Minute

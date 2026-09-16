@@ -1,0 +1,129 @@
+name: CI
+
+# Least privilege by default: every job in this workflow starts read-only.
+# A job that needs more (packages: write, id-token: write, ...) elevates
+# explicitly at job level, which is the only place elevation is allowed.
+permissions: read-all
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  go-verify:
+    name: Go build, vet & test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # All three commands run from the repository root (the Go module root).
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      # The whole suite runs, with nothing excluded or silenced.
+      #
+      # This gate was red when it was first introduced: three packages failed on the
+      # unmodified tree. All three root causes are now fixed, so `go test ./...`
+      # passes and the gate is meaningful:
+      #   - relay/helper : StreamScannerHandler called time.NewTicker(timeout) with
+      #                    timeout <= 0 (i.e. STREAMING_TIMEOUT=0, "no timeout"), which
+      #                    panics on every streaming request. The watchdog ticker is now
+      #                    created only for a positive timeout. The same function also
+      #                    replaced info.StreamStatus unconditionally, discarding
+      #                    already-recorded errors; it is now initialised only when nil.
+      #   - service      : the affinity usage tests derived "unique" keys from
+      #                    time.Now().UnixNano(), which collide on platforms with a
+      #                    coarse clock (Windows ~15ms), so neighbouring tests shared a
+      #                    counter. The tests now key on t.Name().
+      #   - relay/channel/claude : file attachments were classified as
+      #                    pdf->document and everything else ->image, so .txt and unknown
+      #                    binaries were sent as images and rejected upstream. Now:
+      #                    application/pdf->document, text/*->text, image/*->image,
+      #                    anything else->ignored.
+      #
+      # No package needs an external service: controller/token_test.go's MySQL/Postgres
+      # migration tests read TEST_MYSQL_DSN / TEST_POSTGRES_DSN and t.Skip when unset,
+      # and every other test uses in-memory SQLite (glebarez/sqlite) with
+      # common.RedisEnabled = false.
+      - name: Test
+        run: go test ./...
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Full history is required: gitleaks scans every commit, not just the tip.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job is read-only (contents: read), so the action's optional PR
+          # comment annotation is turned off instead of failing on a write call.
+          # Findings still fail the job and are reported in the run summary.
+          GITLEAKS_ENABLE_COMMENTS: false
+
+  frontend-typecheck:
+    name: Frontend type check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: web/default
+        run: bun install
+
+      - name: Type check
+        working-directory: web/default
+        run: bun run typecheck

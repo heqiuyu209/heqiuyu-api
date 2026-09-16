@@ -66,7 +66,7 @@ func LinuxDoBind(c *gin.Context) {
 	}
 
 	user.LinuxDOId = strconv.Itoa(linuxdoUser.Id)
-	err = user.Update(false)
+	err = user.UpdateOAuthBindings()
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -264,5 +264,5 @@ func LinuxdoOAuth(c *gin.Context) {
 		return
 	}
 
-	setupLogin(&user, c)
+	beginLogin(c, &user)
 }

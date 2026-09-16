@@ -11,12 +11,14 @@ import (
 	"sync"
 	"time"
 
+	rootcommon "github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/logger"
 	"github.com/heqiuyu/heqiuyu-api/relay/common"
 	"github.com/heqiuyu/heqiuyu-api/relay/constant"
 	"github.com/heqiuyu/heqiuyu-api/relay/helper"
 	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/setting/operation_setting"
+	"github.com/heqiuyu/heqiuyu-api/setting/system_setting"
 	"github.com/heqiuyu/heqiuyu-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -456,6 +458,25 @@ func DoRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	return doRequest(c, req, info)
 }
 func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {
+	// 可选严格模式：对中继目标也应用 SSRF 策略。
+	//
+	// 默认关闭，因为渠道 base_url 是运营者配置的，自建内网网关（例如
+	// http://ollama:11434）是正当用法，一刀切会直接打断部署。开启
+	// CHANNEL_BASE_URL_STRICT=true 后，指向私网/回环/非允许端口的目标会被拒绝。
+	// 主要控制点仍是"谁能修改渠道的出站目标"（见 controller.UpdateChannel 的门禁）。
+	if rootcommon.ChannelBaseURLStrict && req != nil && req.URL != nil {
+		fetchSetting := system_setting.GetFetchSetting()
+		if err := rootcommon.ValidateURLWithFetchSetting(req.URL.String(), fetchSetting.EnableSSRFProtection, fetchSetting.AllowPrivateIp, fetchSetting.DomainFilterMode, fetchSetting.IpFilterMode, fetchSetting.DomainList, fetchSetting.IpList, fetchSetting.AllowedPorts, fetchSetting.ApplyIPFilterForDomain); err != nil {
+			logger.LogError(c, fmt.Sprintf("relay target blocked by CHANNEL_BASE_URL_STRICT: %v", err))
+			return nil, types.NewErrorWithStatusCode(
+				fmt.Errorf("request blocked: %v", err),
+				types.ErrorCodeAccessDenied,
+				http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(),
+			)
+		}
+	}
+
 	var client *http.Client
 	var err error
 	if info.ChannelSetting.Proxy != "" {

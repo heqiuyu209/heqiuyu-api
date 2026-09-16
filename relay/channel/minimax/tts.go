@@ -9,10 +9,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/heqiuyu/heqiuyu-api/dto"
 	relaycommon "github.com/heqiuyu/heqiuyu-api/relay/common"
+	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/types"
-	"github.com/gin-gonic/gin"
 )
 
 type MiniMaxTTSRequest struct {
@@ -182,12 +183,8 @@ func handleChatCompletionResponse(c *gin.Context, resp *http.Response, info *rel
 	}
 	defer resp.Body.Close()
 
-	// Set response headers
-	for key, values := range resp.Header {
-		for _, value := range values {
-			c.Header(key, value)
-		}
-	}
+	// 只透传白名单内的端到端响应头，避免上游的 Set-Cookie / CSP / CORS / 逐跳头泄漏给调用方
+	service.CopyRelayResponseHeaders(c.Writer.Header(), resp.Header)
 
 	c.Data(resp.StatusCode, "application/json", body)
 	return nil, nil

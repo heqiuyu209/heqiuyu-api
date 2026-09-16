@@ -68,11 +68,18 @@ func VideoProxy(c *gin.Context) {
 
 	var videoURL string
 	proxy := channel.GetSetting().Proxy
-	client, err := service.GetHttpClientWithProxy(proxy)
-	if err != nil {
-		logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to create proxy client for task %s: %s", taskID, err.Error()))
-		videoProxyError(c, http.StatusInternalServerError, "server_error", "Failed to create proxy client")
-		return
+	// 无代理时使用策略感知客户端：它在连接建立时再次校验真实 IP（防 DNS 重绑定），
+	// 而不仅仅在请求前校验一次 URL。
+	var client *http.Client
+	if proxy != "" {
+		client, err = service.GetHttpClientWithProxy(proxy)
+		if err != nil {
+			logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to create proxy client for task %s: %s", taskID, err.Error()))
+			videoProxyError(c, http.StatusInternalServerError, "server_error", "Failed to create proxy client")
+			return
+		}
+	} else {
+		client = service.GetFetchClient()
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
@@ -158,13 +165,11 @@ func VideoProxy(c *gin.Context) {
 		return
 	}
 
-	for key, values := range resp.Header {
-		for _, value := range values {
-			c.Writer.Header().Add(key, value)
-		}
-	}
+	// 只透传白名单内的端到端响应头，避免上游的 Set-Cookie / CSP / CORS / 逐跳头泄漏给调用方
+	service.CopyRelayResponseHeaders(c.Writer.Header(), resp.Header)
 
-	c.Writer.Header().Set("Cache-Control", "public, max-age=86400")
+	// 该响应是按用户鉴权后的私有媒体，禁止共享缓存复用
+	c.Writer.Header().Set("Cache-Control", "private, max-age=86400")
 	c.Writer.WriteHeader(resp.StatusCode)
 	if _, err = io.Copy(c.Writer, resp.Body); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to stream video content: %s", err.Error()))
@@ -212,7 +217,8 @@ func writeVideoDataURL(c *gin.Context, dataURL string) error {
 	}
 
 	c.Writer.Header().Set("Content-Type", mimeType)
-	c.Writer.Header().Set("Cache-Control", "public, max-age=86400")
+	// 与上游分支保持一致：鉴权后的私有媒体只允许私有缓存
+	c.Writer.Header().Set("Cache-Control", "private, max-age=86400")
 	c.Writer.WriteHeader(http.StatusOK)
 	_, err = c.Writer.Write(videoBytes)
 	return err

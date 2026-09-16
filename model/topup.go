@@ -1,5 +1,18 @@
 package model
 
+// 支付/充值模块并发安全约定（重要）
+//
+// 本文件中的"订单完成 → 用户入账"流程必须使用 claimPendingTopUp 之类的
+// CAS（条件更新）来迁移订单状态，不能只依赖行锁：
+//   - clause.Locking 只在 MySQL/PostgreSQL 生效，SQLite 下没有任何行锁；
+//   - "读取 status → 判断 → Save" 在并发回调下会重复入账。
+//
+// 当前已改造为 CAS：UpdatePendingTopUpStatus、Recharge。
+// 仍仅使用行锁（依赖 MySQL/PG 提供互斥，SQLite 下不安全）的函数：
+//   ManualCompleteTopUp、RechargeCreem、RechargeWaffo、RechargeWaffoPancake。
+// 这些函数的 HTTP 路由在本分支中已被移除（属未启用的支付模块），
+// 因此在重新启用任何支付回调路由之前，必须先把它们也改为 CAS。
+
 import (
 	"errors"
 	"fmt"
@@ -9,6 +22,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type TopUp struct {
@@ -77,6 +91,26 @@ func GetTopUpByTradeNo(tradeNo string) *TopUp {
 	return topUp
 }
 
+// claimPendingTopUp 以 CAS（条件更新）方式把充值订单从 pending 置为目标状态。
+//
+// 为什么必须用 CAS：行锁（clause.Locking）只在 MySQL/PostgreSQL 生效，SQLite 根本没有
+// FOR UPDATE。若仅依赖"读状态 → Save"，两个并发回调会同时读到 pending 并各自入账。
+// 条件更新则在所有数据库上保证只有一个流程能把订单迁出 pending。
+//
+// ok=false 表示订单已被其他流程处理，调用方必须放弃后续入账。
+func claimPendingTopUp(tx *gorm.DB, id int, targetStatus string, extra map[string]interface{}) (ok bool, err error) {
+	updates := make(map[string]interface{}, len(extra)+1)
+	for k, v := range extra {
+		updates[k] = v
+	}
+	updates["status"] = targetStatus
+	result := tx.Model(&TopUp{}).Where("id = ? AND status = ?", id, common.TopUpStatusPending).Updates(updates)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
 func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, targetStatus string) error {
 	if tradeNo == "" {
 		return errors.New("未提供支付单号")
@@ -89,7 +123,7 @@ func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, ta
 
 	return DB.Transaction(func(tx *gorm.DB) error {
 		topUp := &TopUp{}
-		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
 			return ErrTopUpNotFound
 		}
 		if expectedPaymentProvider != "" && topUp.PaymentProvider != expectedPaymentProvider {
@@ -99,8 +133,14 @@ func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, ta
 			return ErrTopUpStatusInvalid
 		}
 
-		topUp.Status = targetStatus
-		return tx.Save(topUp).Error
+		ok, err := claimPendingTopUp(tx, topUp.Id, targetStatus, nil)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrTopUpStatusInvalid
+		}
+		return nil
 	})
 }
 
@@ -118,7 +158,7 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 	}
 
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", referenceId).First(topUp).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(refCol+" = ?", referenceId).First(topUp).Error
 		if err != nil {
 			return errors.New("充值订单不存在")
 		}
@@ -131,12 +171,18 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 			return errors.New("充值订单状态错误")
 		}
 
-		topUp.CompleteTime = common.GetTimestamp()
-		topUp.Status = common.TopUpStatusSuccess
-		err = tx.Save(topUp).Error
-		if err != nil {
-			return err
+		completedAt := common.GetTimestamp()
+		ok, claimErr := claimPendingTopUp(tx, topUp.Id, common.TopUpStatusSuccess, map[string]interface{}{
+			"complete_time": completedAt,
+		})
+		if claimErr != nil {
+			return claimErr
 		}
+		if !ok {
+			return errors.New("充值订单状态错误")
+		}
+		topUp.CompleteTime = completedAt
+		topUp.Status = common.TopUpStatusSuccess
 
 		quota = topUp.Money * common.QuotaPerUnit
 		err = tx.Model(&User{}).Where("id = ?", topUp.UserId).Updates(map[string]interface{}{"stripe_customer": customerId, "quota": gorm.Expr("quota + ?", quota)}).Error
@@ -333,7 +379,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		topUp := &TopUp{}
 		// 行级锁，避免并发补单
-		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
 			return errors.New("充值订单不存在")
 		}
 
@@ -401,7 +447,7 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 	}
 
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", referenceId).First(topUp).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(refCol+" = ?", referenceId).First(topUp).Error
 		if err != nil {
 			return errors.New("充值订单不存在")
 		}
@@ -476,7 +522,7 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 	}
 
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(refCol+" = ?", tradeNo).First(topUp).Error
 		if err != nil {
 			return errors.New("充值订单不存在")
 		}
@@ -539,7 +585,7 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 	}
 
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(refCol+" = ?", tradeNo).First(topUp).Error
 		if err != nil {
 			return errors.New("充值订单不存在")
 		}

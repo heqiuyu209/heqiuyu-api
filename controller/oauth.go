@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -124,7 +123,7 @@ func HandleOAuth(c *gin.Context) {
 	}
 
 	// 9. Setup login
-	setupLogin(user, c)
+	beginLogin(c, user)
 }
 
 // handleOAuthBind handles binding OAuth account to existing user
@@ -183,7 +182,7 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 	} else {
 		// Built-in provider: update user record directly
 		provider.SetProviderUserID(&user, oauthUser.ProviderUserID)
-		err = user.Update(false)
+		err = user.UpdateOAuthBindings()
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -212,25 +211,14 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		return user, nil
 	}
 
-	// Try to find user with legacy ID (for GitHub migration from login to numeric ID)
-	if legacyID, ok := oauthUser.Extra["legacy_id"].(string); ok && legacyID != "" {
-		if provider.IsUserIDTaken(legacyID) {
-			err := provider.FillUserByProviderID(user, legacyID)
-			if err != nil {
-				return nil, err
-			}
-			if user.Id != 0 {
-				// Found user with legacy ID, migrate to new ID
-				common.SysLog(fmt.Sprintf("[OAuth] Migrating user %d from legacy_id=%s to new_id=%s",
-					user.Id, legacyID, oauthUser.ProviderUserID))
-				if err := user.UpdateGitHubId(oauthUser.ProviderUserID); err != nil {
-					common.SysError(fmt.Sprintf("[OAuth] Failed to migrate user %d: %s", user.Id, err.Error()))
-					// Continue with login even if migration fails
-				}
-				return user, nil
-			}
-		}
-	}
+	// 注意：这里刻意不再按 GitHub 用户名（login）匹配历史账号。
+	//
+	// 旧实现会在 provider.IsUserIDTaken(login) 命中时把该账号登录进来，并把 github_id
+	// 改绑为当前数字 ID。由于 GitHub 用户名可被改名且旧名会被释放供他人抢注，攻击者
+	// 只要抢注某个历史账号用过的用户名，就能登录该账号并永久接管（审计报告 H7）。
+	//
+	// 历史遗留的非数字 github_id 记录不会自动迁移：受影响用户需在登录后主动重新绑定。
+	// 启动时 model.WarnLegacyOAuthIDs 会输出需要处理的记录数。
 
 	// User doesn't exist, create new user if registration is enabled
 	if !common.RegisterEnabled {

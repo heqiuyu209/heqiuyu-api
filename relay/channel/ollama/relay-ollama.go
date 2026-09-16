@@ -281,7 +281,12 @@ func ollamaEmbeddingHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 func FetchOllamaModels(baseURL, apiKey string) ([]OllamaModel, error) {
 	url := fmt.Sprintf("%s/api/tags", baseURL)
 
-	client := &http.Client{}
+	// 裸 &http.Client{} 没有超时：上游地址被黑洞时会永久占用 goroutine 与连接。
+	// 这里改用带超时且会复查重定向的默认中继客户端。
+	client := service.GetHttpClient()
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %v", err)

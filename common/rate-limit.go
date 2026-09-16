@@ -41,6 +41,32 @@ func (l *InMemoryRateLimiter) clearExpiredItems() {
 	}
 }
 
+// Delete 清除某个 key 的计数（例如认证成功后解除账号锁定计数）。
+func (l *InMemoryRateLimiter) Delete(key string) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	delete(l.store, key)
+}
+
+// Peek 判断 key 是否已达上限，但**不**记录本次请求。
+//
+// 用于"先检查锁定状态、只在失败时计数"的场景（例如账号级登录锁定）：
+// 直接调用 Request 会把失败次数与合法尝试混在一起统计。
+func (l *InMemoryRateLimiter) Peek(key string, maxRequestNum int, duration int64) bool {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	queue, ok := l.store[key]
+	if !ok || queue == nil || len(*queue) == 0 {
+		return true
+	}
+	if len(*queue) < maxRequestNum {
+		return true
+	}
+	now := time.Now().Unix()
+	// 最旧的一条已滑出时间窗口，视为未锁定
+	return now-(*queue)[0] >= duration
+}
+
 // Request parameter duration's unit is seconds
 func (l *InMemoryRateLimiter) Request(key string, maxRequestNum int, duration int64) bool {
 	l.mutex.Lock()

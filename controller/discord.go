@@ -175,7 +175,7 @@ func DiscordOAuth(c *gin.Context) {
 		})
 		return
 	}
-	setupLogin(&user, c)
+	beginLogin(c, &user)
 }
 
 func DiscordBind(c *gin.Context) {
@@ -211,7 +211,7 @@ func DiscordBind(c *gin.Context) {
 		return
 	}
 	user.DiscordId = discordUser.UID
-	err = user.Update(false)
+	err = user.UpdateOAuthBindings()
 	if err != nil {
 		common.ApiError(c, err)
 		return

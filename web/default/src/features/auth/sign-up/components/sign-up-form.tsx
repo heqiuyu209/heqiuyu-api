@@ -36,6 +36,7 @@ import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useEmailVerification } from '@/features/auth/hooks/use-email-verification'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
 import { getAffiliateCode } from '@/features/auth/lib/storage'
+import { isTwoFactorRequired } from '@/features/auth/lib/two-factor'
 
 export function SignUpForm({
   className,
@@ -58,7 +59,8 @@ export function SignUpForm({
     setTurnstileToken,
     validateTurnstile,
   } = useTurnstile()
-  const { redirectToLogin, handleLoginSuccess } = useAuthRedirect()
+  const { redirectToLogin, redirectTo2FA, handleLoginSuccess } =
+    useAuthRedirect()
   const {
     isSending: isSendingCode,
     secondsLeft,
@@ -183,6 +185,13 @@ export function SignUpForm({
     try {
       const res = await wechatLoginByCode(wechatCode)
       if (res?.success) {
+        if (isTwoFactorRequired(res.data)) {
+          toast.info(t('Please enter the authentication code.'))
+          handleWeChatDialogChange(false)
+          redirectTo2FA()
+          return
+        }
+
         await handleLoginSuccess(res.data as { id?: number } | null)
         toast.success(t('Signed in via WeChat'))
         handleWeChatDialogChange(false)

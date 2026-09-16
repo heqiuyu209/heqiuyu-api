@@ -47,7 +47,8 @@ func RelayMidjourneyImage(c *gin.Context) {
 		}
 	}
 	if httpClient == nil {
-		httpClient = service.GetHttpClient()
+		// 策略感知客户端：连接期 IP 校验 + 重定向复查
+		httpClient = service.GetFetchClient()
 	}
 	fetchSetting := system_setting.GetFetchSetting()
 	if err := common.ValidateURLWithFetchSetting(midjourneyTask.ImageUrl, fetchSetting.EnableSSRFProtection, fetchSetting.AllowPrivateIp, fetchSetting.DomainFilterMode, fetchSetting.IpFilterMode, fetchSetting.DomainList, fetchSetting.IpList, fetchSetting.AllowedPorts, fetchSetting.ApplyIPFilterForDomain); err != nil {
@@ -66,8 +67,10 @@ func RelayMidjourneyImage(c *gin.Context) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
+		// 上游响应体只写服务端日志，客户端只返回简短错误
+		common.SysLog(fmt.Sprintf("midjourney image fetch failed with status %d, body: %s", resp.StatusCode, string(responseBody)))
 		c.JSON(resp.StatusCode, gin.H{
-			"error": string(responseBody),
+			"error": fmt.Sprintf("upstream returned status code %d", resp.StatusCode),
 		})
 		return
 	}
