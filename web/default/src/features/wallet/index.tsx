@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getSelf } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -100,7 +101,9 @@ export function Wallet(props: WalletProps) {
                       {t('Redeem Code')}
                     </h3>
                     <p className='text-muted-foreground mt-2 text-sm'>
-                      {t('Enter a redemption code to add quota to your balance')}
+                      {t(
+                        'Enter a redemption code to add quota to your balance'
+                      )}
                     </p>
                   </CardHeader>
                   <CardContent className='space-y-4'>
@@ -117,10 +120,13 @@ export function Wallet(props: WalletProps) {
                         />
                         <Button
                           onClick={handleRedeem}
-                          loading={redeeming}
-                          disabled={!redemptionCode}
+                          disabled={redeeming || !redemptionCode}
+                          aria-busy={redeeming}
                           className='shrink-0'
                         >
+                          {redeeming && (
+                            <Loader2 className='size-4 animate-spin' />
+                          )}
                           {t('Redeem')}
                         </Button>
                       </div>

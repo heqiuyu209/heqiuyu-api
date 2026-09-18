@@ -37,6 +37,10 @@ func validatedDialContext(base *net.Dialer) func(ctx context.Context, network, a
 		}
 
 		fetchSetting := system_setting.GetFetchSetting()
+		// This opt-out applies only to domain names; literal IPs still use IP policy.
+		if net.ParseIP(host) == nil && !fetchSetting.ApplyIPFilterForDomain {
+			return base.DialContext(ctx, network, addr)
+		}
 
 		var candidates []net.IP
 		if ip := net.ParseIP(host); ip != nil {
@@ -88,6 +92,47 @@ func newFetchTransport() *http.Transport {
 	return transport
 }
 
+// Environment proxies are configured by the operator, just like explicit channel
+// proxies. Validate the destination URL, not the proxy's address. DNS resolution
+// beyond a proxy is governed by that trusted proxy; direct connections retain
+// connection-time IP validation.
+type fetchTransport struct {
+	direct          http.RoundTripper
+	proxy           http.RoundTripper
+	proxyForRequest func(*http.Request) (*url.URL, error)
+}
+
+func newFetchRoundTripper() *fetchTransport {
+	direct := newFetchTransport()
+	proxied := direct.Clone()
+	proxied.Proxy = http.ProxyFromEnvironment
+	proxied.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	return &fetchTransport{direct: direct, proxy: proxied, proxyForRequest: http.ProxyFromEnvironment}
+}
+
+func (t *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	setting := system_setting.GetFetchSetting()
+	if err := common.ValidateURLWithFetchSetting(req.URL.String(), setting.EnableSSRFProtection, setting.AllowPrivateIp, setting.DomainFilterMode, setting.IpFilterMode, setting.DomainList, setting.IpList, setting.AllowedPorts, setting.ApplyIPFilterForDomain); err != nil {
+		return nil, fmt.Errorf("request reject: %w", err)
+	}
+	proxyURL, err := t.proxyForRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if proxyURL != nil {
+		return t.proxy.RoundTrip(req)
+	}
+	return t.direct.RoundTrip(req)
+}
+
+func (t *fetchTransport) CloseIdleConnections() {
+	for _, transport := range []http.RoundTripper{t.direct, t.proxy} {
+		if closer, ok := transport.(interface{ CloseIdleConnections() }); ok {
+			closer.CloseIdleConnections()
+		}
+	}
+}
+
 func checkRedirect(req *http.Request, via []*http.Request) error {
 	fetchSetting := system_setting.GetFetchSetting()
 	urlStr := req.URL.String()
@@ -131,7 +176,7 @@ func InitHttpClient() {
 	// 连接期 IP 校验。中继路径继续使用 httpClient —— 渠道 base_url 是运营者配置的，
 	// 自建内网网关是正常用法，对其施加私网拦截会直接打断部署（见 CHANNEL_BASE_URL_STRICT）。
 	fetchClient = &http.Client{
-		Transport:     newFetchTransport(),
+		Transport:     newFetchRoundTripper(),
 		Timeout:       effectiveRelayTimeout(),
 		CheckRedirect: checkRedirect,
 	}
@@ -151,7 +196,8 @@ func GetHttpClient() *http.Client {
 }
 
 // GetFetchClient 返回用于"用户可影响的 URL"的客户端：
-// 具备重定向复查 + 连接期 IP 校验（防 DNS 重绑定）。
+// 每次请求/重定向都校验目标 URL；直连时另做连接期 IP 校验（防 DNS 重绑定）。
+// 环境变量配置的代理视为受信基础设施，代理后的 DNS/网络策略由代理负责。
 // 所有下载、Webhook、通知、代理类抓取都应使用它，而不是 GetHttpClient。
 func GetFetchClient() *http.Client {
 	if fetchClient == nil {

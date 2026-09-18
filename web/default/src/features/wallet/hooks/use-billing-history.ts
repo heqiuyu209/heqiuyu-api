@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import i18next from 'i18next'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
 import { getUserBillingHistory, isApiSuccess } from '../api'
 import type { BillingHistoryResponse, TopupRecord } from '../types'
 
@@ -10,6 +11,8 @@ import type { BillingHistoryResponse, TopupRecord } from '../types'
 // ============================================================================
 
 interface UseBillingHistoryOptions {
+  /** Fetch only while the billing history is visible. */
+  enabled?: boolean
   /** Initial page number */
   initialPage?: number
   /** Initial page size */
@@ -20,11 +23,19 @@ interface UseBillingHistoryOptions {
  * Stable React Query key for the current user's billing history.
  */
 export function billingHistoryQueryKey(
+  userId: number | null,
   page: number,
   pageSize: number,
   keyword: string
-): readonly ['wallet', 'billing-history', number, number, string] {
-  return ['wallet', 'billing-history', page, pageSize, keyword] as const
+): readonly [
+  'wallet',
+  'billing-history',
+  number | null,
+  number,
+  number,
+  string,
+] {
+  return ['wallet', 'billing-history', userId, page, pageSize, keyword] as const
 }
 
 /**
@@ -34,14 +45,16 @@ export function billingHistoryQueryKey(
  * removed together with the backend routes that served them.
  */
 export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
-  const { initialPage = 1, initialPageSize = 10 } = options
+  const { initialPage = 1, initialPageSize = 10, enabled = true } = options
+  const userId = useAuthStore((state) => state.auth.user?.id ?? null)
 
   const [page, setPage] = useState(initialPage)
   const [pageSize, setPageSize] = useState(initialPageSize)
   const [keyword, setKeyword] = useState('')
 
   const query = useQuery({
-    queryKey: billingHistoryQueryKey(page, pageSize, keyword),
+    queryKey: billingHistoryQueryKey(userId, page, pageSize, keyword),
+    enabled: enabled && userId !== null,
     queryFn: async (): Promise<BillingHistoryResponse> => {
       const response = await getUserBillingHistory(page, pageSize, keyword)
 

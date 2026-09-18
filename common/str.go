@@ -222,7 +222,7 @@ func maskKeyHead(body string, maxKeep int) string {
 // www.openai.com -> ***.***.com
 // api.openai.com -> ***.***.com
 // sk-abcd1234efgh -> sk-abcd********
-// AIzaSyAAAaUooTUni8AdaOkSRMda30n_Q4vrV70 -> AIza********
+// Google API keys (AIza prefix) -> AIza********
 // AKIAIOSFODNN7EXAMPLE -> AKIA********
 // Authorization: Bearer ghp_abcdefghijklmnopqrst -> Authorization: Bearer ********
 func MaskSensitiveInfo(str string) string {

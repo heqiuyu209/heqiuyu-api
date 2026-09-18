@@ -4,6 +4,7 @@
   "description": "heqiuyu - AI Model Gateway Desktop Application",
   "main": "main.js",
   "scripts": {
+    "test": "node --test secrets.test.js",
     "start-app": "electron .",
     "dev-app": "cross-env NODE_ENV=development electron .",
     "build": "electron-builder",
@@ -37,6 +38,7 @@
     },
     "files": [
       "main.js",
+      "secrets.js",
       "preload.js",
       "icon.png",
       "tray-iconTemplate.png",

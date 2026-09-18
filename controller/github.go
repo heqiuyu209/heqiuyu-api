@@ -89,8 +89,7 @@ func GitHubOAuth(c *gin.Context) {
 		})
 		return
 	}
-	username := session.Get("username")
-	if username != nil {
+	if session.Get("id") != nil {
 		GitHubBind(c)
 		return
 	}

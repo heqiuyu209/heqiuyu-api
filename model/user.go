@@ -226,8 +226,10 @@ func WarnLegacyOAuthIDs() {
 //   - access_token 是等同于该用户身份的凭据（可绕过会话直接调用管理接口），
 //     一旦随列表返回，任意管理员即可读取 root 的 access_token 并提权到 root
 //     （审计报告 H2）。需要完整行的场景请使用 GetUserById(id, true)。
-const userListColumns = "id, username, display_name, role, status, email, quota, used_quota, request_count, " +
-	"group, aff_code, aff_count, aff_quota, aff_history, inviter_id, remark, created_at, last_login_at"
+var userListColumns = []string{
+	"id", "username", "display_name", "role", "status", "email", "quota", "used_quota", "request_count",
+	"group", "aff_code", "aff_count", "aff_quota", "aff_history", "inviter_id", "remark", "created_at", "last_login_at",
+}
 
 // applyRoleScope 按调用者角色限制可见用户：非 root 只能看到比自己级别低的用户，
 // 与单用户接口 controller.GetUser 的层级校验保持一致。
@@ -388,9 +390,9 @@ func HardDeleteUserById(id int) error {
 func inviteUser(inviterId int) (err error) {
 	// 原子自增，避免整行 Save 覆盖并发发生的余额/状态变更。
 	return DB.Model(&User{}).Where("id = ?", inviterId).Updates(map[string]interface{}{
-		"aff_count":         gorm.Expr("aff_count + 1"),
-		"aff_quota":         gorm.Expr("aff_quota + ?", common.QuotaForInviter),
-		"aff_history":       gorm.Expr("aff_history + ?", common.QuotaForInviter),
+		"aff_count":   gorm.Expr("aff_count + 1"),
+		"aff_quota":   gorm.Expr("aff_quota + ?", common.QuotaForInviter),
+		"aff_history": gorm.Expr("aff_history + ?", common.QuotaForInviter),
 	}).Error
 }
 

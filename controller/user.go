@@ -83,6 +83,8 @@ func Login(c *gin.Context) {
 func setupLogin(user *model.User, c *gin.Context) {
 	model.UpdateUserLastLoginAt(user.Id)
 	session := sessions.Default(c)
+	// Authentication must not inherit another account's verification or pending login.
+	session.Clear()
 	session.Set("id", user.Id)
 	// 记录登录时刻：middleware.SensitiveActionGuard 据此判断"是否刚用主凭据认证过"，
 	// 从而允许近期登录的用户登记/撤销 2FA、Passkey 与 access token。
@@ -115,8 +117,15 @@ func setupLogin(user *model.User, c *gin.Context) {
 // Passkey 等路径直接调用 setupLogin，导致启用了 2FA 的用户只要绑定过任一第三方身份
 // 就能完全绕过第二因子（审计报告 M1）。
 func beginLogin(c *gin.Context, user *model.User) {
-	if model.IsTwoFAEnabled(user.Id) {
+	twoFA, err := model.GetTwoFAByUserId(user.Id)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to check 2FA for user %d: %v", user.Id, err))
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		return
+	}
+	if twoFA != nil && twoFA.IsEnabled {
 		session := sessions.Default(c)
+		session.Clear()
 		session.Set("pending_username", user.Username)
 		session.Set("pending_user_id", user.Id)
 		if err := session.Save(); err != nil {

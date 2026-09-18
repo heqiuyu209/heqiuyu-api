@@ -37,11 +37,13 @@ import { PageFooterPortal } from '@/components/layout'
 import { DEFAULT_LOGS_DATA, LOG_TYPE_ENUM } from '../constants'
 import { useColumnsByCategory } from '../lib/columns'
 import { fetchLogsByCategory } from '../lib/utils'
-import type { LogCategory } from '../types'
+import type { LogCategory, UsageLog, MidjourneyLog, TaskLog } from '../types'
 import { CommonLogsFilterBar } from './common-logs-filter-bar'
 import { CommonLogsStats } from './common-logs-stats'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
+
+type LogRecord = UsageLog | MidjourneyLog | TaskLog
 
 const logTypeBorderColor: Record<number, string> = {
   [LOG_TYPE_ENUM.TOPUP]: 'border-l-cyan-400 dark:border-l-cyan-500',
@@ -140,9 +142,9 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const columns = useColumnsByCategory(logCategory, isAdmin)
   const isLoadingData = isLoading || (isFetching && !data)
 
-  const table = useReactTable({
-    data: logs as Record<string, unknown>[],
-    columns: columns as ColumnDef<Record<string, unknown>>[],
+  const table = useReactTable<LogRecord>({
+    data: logs,
+    columns: columns as ColumnDef<LogRecord>[],
     state: {
       columnFilters,
       pagination,
@@ -171,12 +173,10 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     if (rows.length === 0) return null
 
     return rows.map((row) => {
-      const logType = (row.original as Record<string, unknown>).type as
-        | number
-        | undefined
+      const logType = 'type' in row.original ? row.original.type : undefined
       const borderClass =
         isCommon && logType != null
-          ? logTypeBorderColor[logType] ?? 'border-l-transparent'
+          ? (logTypeBorderColor[logType] ?? 'border-l-transparent')
           : ''
       const tintClass =
         isCommon && logType != null ? (logTypeRowTint[logType] ?? '') : ''
@@ -204,18 +204,14 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     <>
       <div className='space-y-4'>
         {logCategory === 'common' ? (
-          <div className='rounded-md border bg-card/50 p-3 shadow-xs'>
+          <div className='bg-card/50 rounded-md border p-3 shadow-xs'>
             <CommonLogsFilterBar
               stats={<CommonLogsStats />}
               viewOptions={<DataTableViewOptions table={table} />}
             />
           </div>
         ) : (
-          <DataTableToolbar
-            table={table}
-            filters={[]}
-            customSearch={null}
-          />
+          <DataTableToolbar table={table} filters={[]} customSearch={null} />
         )}
         {isMobile ? (
           <MobileCardList
@@ -236,7 +232,10 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
             <Table>
               <TableHeader className='bg-muted/30 sticky top-0 z-10'>
                 {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id} className='border-l-[3px] border-l-transparent'>
+                  <TableRow
+                    key={headerGroup.id}
+                    className='border-l-[3px] border-l-transparent'
+                  >
                     {headerGroup.headers.map((header) => (
                       <TableHead key={header.id} colSpan={header.colSpan}>
                         {header.isPlaceholder

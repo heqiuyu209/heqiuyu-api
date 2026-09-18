@@ -384,15 +384,14 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 	if relayInfo.IsPlayground {
 		return nil
 	}
-	//if relayInfo.TokenUnlimited {
-	//	return nil
-	//}
 	token, err := model.GetTokenByKey(relayInfo.TokenKey, false)
 	if err != nil {
 		return err
 	}
 	if relayInfo.TokenUnlimited {
-		return nil
+		// Unlimited tokens still record usage. Settlement and refunds adjust this
+		// reservation, so skipping it would create quota and negative usage.
+		return model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
 	}
 	if token.RemainQuota < quota {
 		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
