@@ -36,7 +36,7 @@ COPY --from=builder /build/dist ./web/default/dist
 COPY --from=builder-classic /build/dist ./web/classic/dist
 RUN go build -ldflags "-s -w -X 'github.com/heqiuyu/heqiuyu-api/common.Version=$(cat VERSION)'" -o heqiuyu-api
 
-FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tzdata libasan8 wget \
