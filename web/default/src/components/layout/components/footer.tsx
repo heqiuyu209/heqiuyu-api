@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { sanitizeHtml } from '@/lib/sanitize-html'
 import { useSystemConfig } from '@/hooks/use-system-config'
 
 interface FooterLink {
@@ -75,7 +76,7 @@ export function Footer(props: FooterProps) {
     return (
       <div
         className='custom-footer w-full'
-        dangerouslySetInnerHTML={{ __html: footerHtml }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(footerHtml) }}
       />
     )
   }

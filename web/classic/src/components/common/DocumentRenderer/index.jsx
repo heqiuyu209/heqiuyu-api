@@ -27,6 +27,7 @@ import {
 } from '@douyinfe/semi-illustrations';
 import { useTranslation } from 'react-i18next';
 import MarkdownRenderer from '../markdown/MarkdownRenderer';
+import { sanitizeHtml } from '../../../helpers/sanitizeHtml';
 
 // Check whether content is a URL.
 const isUrl = (content) => {
@@ -46,19 +47,29 @@ const isHtmlContent = (content) => {
   return htmlTagRegex.test(content);
 };
 
-// Parse HTML content and extract inline styles.
-const sanitizeHtml = (html) => {
+// 清洗 CSS：移除 url()、expression()、@import、javascript: 等危险片段
+const cleanCss = (css) =>
+  String(css || '')
+    .replace(/url\s*\(/gi, ' /*sanitized*/ ')
+    .replace(/expression\s*\(/gi, ' /*sanitized*/ ')
+    .replace(/@import/gi, ' /*sanitized*/ ')
+    .replace(/javascript\s*:/gi, ' ')
+    .replace(/vbscript\s*:/gi, ' ')
+    .replace(/data\s*:/gi, ' ');
+
+// Parse HTML content: extract sanitized inline styles and sanitized body content.
+const sanitizeDocumentHtml = (html) => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = html;
 
   const styles = Array.from(tempDiv.querySelectorAll('style'))
-    .map((style) => style.innerHTML)
+    .map((style) => cleanCss(style.innerHTML))
     .join('\n');
 
   const bodyContent = tempDiv.querySelector('body');
-  const content = bodyContent ? bodyContent.innerHTML : html;
+  const rawContent = bodyContent ? bodyContent.innerHTML : html;
 
-  return { content, styles };
+  return { content: sanitizeHtml(rawContent), styles };
 };
 
 /**
@@ -106,7 +117,7 @@ const DocumentRenderer = ({ apiEndpoint, title, cacheKey, emptyMessage }) => {
     if (!isHtmlContent(content)) {
       return { content: '', styles: '' };
     }
-    return sanitizeHtml(content);
+    return sanitizeDocumentHtml(content);
   }, [content]);
 
   useEffect(() => {

@@ -35,6 +35,7 @@ import {
 } from '@douyinfe/semi-illustrations';
 import { StatusContext } from '../../context/Status';
 import { Bell, Megaphone } from 'lucide-react';
+import { sanitizeHtml } from '../../helpers/sanitizeHtml';
 
 const NoticeModal = ({
   visible,
@@ -143,7 +144,7 @@ const NoticeModal = ({
 
     return (
       <div
-        dangerouslySetInnerHTML={{ __html: noticeContent }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(noticeContent) }}
         className='notice-content-scroll max-h-[55vh] overflow-y-auto pr-2'
       />
     );
@@ -170,8 +171,8 @@ const NoticeModal = ({
       <div className='max-h-[55vh] overflow-y-auto pr-2 card-content-scroll'>
         <Timeline mode='left'>
           {processedAnnouncements.map((item, idx) => {
-            const htmlContent = marked.parse(item.content || '');
-            const htmlExtra = item.extra ? marked.parse(item.extra) : '';
+            const htmlContent = sanitizeHtml(marked.parse(item.content || ''));
+            const htmlExtra = item.extra ? sanitizeHtml(marked.parse(item.extra)) : '';
             return (
               <Timeline.Item
                 key={idx}

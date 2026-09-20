@@ -40,6 +40,7 @@ import {
 } from '@douyinfe/semi-icons';
 import { Link } from 'react-router-dom';
 import NoticeModal from '../../components/layout/NoticeModal';
+import { sanitizeHtml } from '../../helpers/sanitizeHtml';
 import {
   OpenAI,
   Claude,
@@ -409,7 +410,7 @@ const Home = () => {
           ) : (
             <div
               className='mt-[60px]'
-              dangerouslySetInnerHTML={{ __html: homePageContent }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(homePageContent) }}
             />
           )}
         </div>
