@@ -48,6 +48,18 @@ func TestMain(m *testing.M) {
 		panic("failed to migrate: " + err.Error())
 	}
 
+	// Channel.BeforeSave 加密 hook 依赖 GetChannelEncryptionKey 的 sync.Once
+	// 在启动期预热完成（生产由 main.go 预热，之后 hook 内只读缓存不查库）。
+	// 测试若不预热，首次 Create 会在事务内触发 loadChannelEncryptionKey 查库，
+	// 与 SetMaxOpenConns(1) 自锁，导致 go test 超时（CI Go test step 失败）。
+	// 这里通过环境变量注入固定密钥并主动预热，避免依赖 Options 表迁移。
+	if err := os.Setenv("CHANNEL_ENCRYPTION_KEY", "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE="); err != nil {
+		panic("failed to set CHANNEL_ENCRYPTION_KEY: " + err.Error())
+	}
+	if _, err := model.GetChannelEncryptionKey(); err != nil {
+		panic("failed to warm channel encryption key: " + err.Error())
+	}
+
 	os.Exit(m.Run())
 }
 
