@@ -150,7 +150,8 @@ func (p *GenericOAuthProvider) ExchangeToken(ctx context.Context, code string, c
 	}
 
 	bodyStr := string(body)
-	logger.LogDebug(ctx, "[OAuth-Generic-%s] ExchangeToken response body: %s", p.config.Slug, bodyStr[:min(len(bodyStr), 500)])
+	// 注意：响应体可能包含 access_token / refresh_token / id_token 等敏感字段，
+	// 不再整体写入日志（审计报告 N1）。
 
 	// Try to parse as JSON first
 	var tokenResponse struct {
@@ -236,7 +237,7 @@ func (p *GenericOAuthProvider) GetUserInfo(ctx context.Context, token *OAuthToke
 	}
 
 	bodyStr := string(body)
-	logger.LogDebug(ctx, "[OAuth-Generic-%s] GetUserInfo response body: %s", p.config.Slug, bodyStr[:min(len(bodyStr), 500)])
+	// 用户信息响应体可能含邮箱等个人信息，不再整体写入日志（审计报告 N1）。
 
 	// Extract fields using gjson (supports JSONPath-like syntax)
 	userId := gjson.Get(bodyStr, p.config.UserIdField).String()
@@ -315,6 +316,17 @@ func (p *GenericOAuthProvider) GetProviderPrefix() string {
 // GetProviderId returns the provider ID for binding purposes
 func (p *GenericOAuthProvider) GetProviderId() int {
 	return p.config.Id
+}
+
+// maskOAuthSecret 对 token 类敏感值做脱敏展示，避免完整凭据进入日志（审计报告 N1）。
+func maskOAuthSecret(s string) string {
+	if s == "" {
+		return "(empty)"
+	}
+	if len(s) <= 8 {
+		return "****"
+	}
+	return s[:4] + "****" + s[len(s)-4:]
 }
 
 func normalizeAuthorizationTokenType(tokenType string) string {
