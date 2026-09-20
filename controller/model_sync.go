@@ -267,8 +267,14 @@ func ensureVendorID(vendorName string, vendorByName map[string]upstreamVendor, v
 // - 可通过 overwrite 选择性覆盖更新本地已有模型的字段（前提：sync_official <> 0）
 func SyncUpstreamModels(c *gin.Context) {
 	var req syncRequest
-	// 允许空体
-	_ = c.ShouldBindJSON(&req)
+	// 空体时允许走默认值；非空体必须绑定成功，坏 JSON 直接报错便于排查
+	if c.Request.Body != nil && c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			common.SysError("invalid sync request body: " + err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "请求体 JSON 格式错误"})
+			return
+		}
+	}
 	// 1) 获取未配置模型列表
 	missing, err := model.GetMissingModels()
 	if err != nil {

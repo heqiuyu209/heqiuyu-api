@@ -20,8 +20,20 @@ var (
 	httpClient      *http.Client
 	fetchClient     *http.Client
 	proxyClientLock sync.Mutex
-	proxyClients    = make(map[string]*http.Client)
+	proxyClients    = make(map[string]*proxyCacheEntry)
 )
+
+// proxyClientTTL 代理客户端空闲过期时间；maxProxyClients 缓存容量上限。
+// 代理 URL 由运营者配置，长期运行会累积连接，超出上限时按最近使用时间淘汰最旧项。
+const (
+	proxyClientTTL  = 24 * time.Hour
+	maxProxyClients = 32
+)
+
+type proxyCacheEntry struct {
+	client   *http.Client
+	lastUsed time.Time
+}
 
 // validatedDialContext 返回一个在真正建立连接前逐 IP 执行 SSRF 策略的 DialContext。
 //
@@ -237,12 +249,47 @@ func GetHttpClientWithProxy(proxyURL string) (*http.Client, error) {
 func ResetProxyClientCache() {
 	proxyClientLock.Lock()
 	defer proxyClientLock.Unlock()
-	for _, client := range proxyClients {
-		if transport, ok := client.Transport.(*http.Transport); ok && transport != nil {
-			transport.CloseIdleConnections()
+	for _, entry := range proxyClients {
+		closeProxyClient(entry.client)
+	}
+	proxyClients = make(map[string]*proxyCacheEntry)
+}
+
+// closeProxyClient 关闭客户端空闲连接（幂等，可安全传 nil）
+func closeProxyClient(client *http.Client) {
+	if client == nil || client.Transport == nil {
+		return
+	}
+	if transport, ok := client.Transport.(*http.Transport); ok && transport != nil {
+		transport.CloseIdleConnections()
+	}
+}
+
+// evictProxyClients 清理过期代理客户端；仍超上限时按最近使用时间淘汰最旧项。
+// 调用方必须持有 proxyClientLock。
+func evictProxyClients() {
+	now := time.Now()
+	for key, entry := range proxyClients {
+		if now.Sub(entry.lastUsed) > proxyClientTTL {
+			closeProxyClient(entry.client)
+			delete(proxyClients, key)
 		}
 	}
-	proxyClients = make(map[string]*http.Client)
+	for len(proxyClients) > maxProxyClients {
+		var oldestKey string
+		var oldest time.Time
+		for key, entry := range proxyClients {
+			if oldestKey == "" || entry.lastUsed.Before(oldest) {
+				oldestKey = key
+				oldest = entry.lastUsed
+			}
+		}
+		if oldestKey == "" {
+			break
+		}
+		closeProxyClient(proxyClients[oldestKey].client)
+		delete(proxyClients, oldestKey)
+	}
 }
 
 // NewProxyHttpClient 创建支持代理的 HTTP 客户端
@@ -255,9 +302,10 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 	}
 
 	proxyClientLock.Lock()
-	if client, ok := proxyClients[proxyURL]; ok {
+	if entry, ok := proxyClients[proxyURL]; ok {
+		entry.lastUsed = time.Now()
 		proxyClientLock.Unlock()
-		return client, nil
+		return entry.client, nil
 	}
 	proxyClientLock.Unlock()
 
@@ -283,7 +331,8 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 		}
 		client.Timeout = effectiveRelayTimeout()
 		proxyClientLock.Lock()
-		proxyClients[proxyURL] = client
+		proxyClients[proxyURL] = &proxyCacheEntry{client: client, lastUsed: time.Now()}
+		evictProxyClients()
 		proxyClientLock.Unlock()
 		return client, nil
 
@@ -322,7 +371,8 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 		client := &http.Client{Transport: transport, CheckRedirect: checkRedirect}
 		client.Timeout = effectiveRelayTimeout()
 		proxyClientLock.Lock()
-		proxyClients[proxyURL] = client
+		proxyClients[proxyURL] = &proxyCacheEntry{client: client, lastUsed: time.Now()}
+		evictProxyClients()
 		proxyClientLock.Unlock()
 		return client, nil
 
