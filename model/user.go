@@ -598,6 +598,8 @@ func (user *User) UpdateProfile(updatePassword bool) error {
 			return err
 		}
 		columns["password"] = hashed
+		// 改密即凭据轮换：旧会话 cookie 立即失效（审计报告 R1）
+		columns["auth_version"] = gorm.Expr("auth_version + 1")
 	}
 	return updateColumns(user.Id, columns)
 }
@@ -649,6 +651,8 @@ func (user *User) Edit(updatePassword bool) error {
 			return err
 		}
 		columns["password"] = hashed
+		// 改密即凭据轮换：旧会话 cookie 立即失效（审计报告 R1）
+		columns["auth_version"] = gorm.Expr("auth_version + 1")
 	}
 	return updateColumns(user.Id, columns)
 }
@@ -828,8 +832,27 @@ func ResetUserPasswordByEmail(email string, password string) error {
 	if err != nil {
 		return err
 	}
-	err = DB.Model(&User{}).Where("email = ?", email).Update("password", hashedPassword).Error
-	return err
+	// 改密属于凭据轮换事件：密码更新与 auth_version 自增必须在同一事务内完成，
+	// 使改密前签发的所有登录会话 cookie 立即失效（审计报告 R1）。
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&User{}).Where("email = ?", email).
+			Update("password", hashedPassword).Error; err != nil {
+			return err
+		}
+		return tx.Model(&User{}).Where("email = ?", email).
+			UpdateColumn("auth_version", gorm.Expr("auth_version + 1")).Error
+	})
+}
+
+// GetUserAuthVersion 返回用户当前的认证版本号（供会话 cookie 校验）。
+// 用户不存在时返回 0 与 ErrRecordNotFound。
+func GetUserAuthVersion(userId int) (int, error) {
+	var version int
+	err := DB.Model(&User{}).Where("id = ?", userId).Select("auth_version").Scan(&version).Error
+	if err != nil {
+		return 0, err
+	}
+	return version, nil
 }
 
 func IsAdmin(userId int) bool {

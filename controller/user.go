@@ -89,6 +89,12 @@ func setupLogin(user *model.User, c *gin.Context) {
 	// 记录登录时刻：middleware.SensitiveActionGuard 据此判断"是否刚用主凭据认证过"，
 	// 从而允许近期登录的用户登记/撤销 2FA、Passkey 与 access token。
 	session.Set(middleware.SessionLoginAtKey, time.Now().Unix())
+	// 记录签发会话时的认证版本号：改密会自增 auth_version，旧会话据此失效（审计报告 R1）。
+	if authVersion, err := model.GetUserAuthVersion(user.Id); err == nil {
+		session.Set(middleware.SessionAuthVersionKey, authVersion)
+	} else {
+		common.SysLog(fmt.Sprintf("GetUserAuthVersion error for user %d: %v", user.Id, err))
+	}
 	err := session.Save()
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)

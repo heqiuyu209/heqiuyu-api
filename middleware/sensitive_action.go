@@ -18,6 +18,10 @@ const (
 	// SessionLoginAtKey 是会话中记录登录时刻的键，由 controller.setupLogin 写入。
 	SessionLoginAtKey = "login_at"
 
+	// SessionAuthVersionKey 是会话中记录"签发该会话时的 auth_version"的键，
+	// 由 controller.setupLogin 写入；密码变更会自增 auth_version（审计报告 R1）。
+	SessionAuthVersionKey = "auth_version"
+
 	// 与 controller 中的常量保持一致（会话键与方法名）。两侧都用字面量，
 	// 避免 middleware 反向依赖 controller 造成循环引用。
 	sensitiveActionMessage = "为保障账号安全，请重新登录后再执行该操作。/ For your security, please sign in again before performing this action."
