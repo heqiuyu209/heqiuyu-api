@@ -56,6 +56,8 @@ const isSafeUrl = (value) => {
   if (!value) return false;
   const trimmed = String(value).trim();
   if (!trimmed) return false;
+  // 协议相对 URL（//host/path）会跟随当前页协议加载外部资源，禁止放行
+  if (/^\/\//.test(trimmed)) return false;
   // 锚点 / 相对路径 / 查询串
   if (/^(#|\/|\.\/|\.\.\/|\?)/.test(trimmed)) return true;
   // 带协议时必须命中白名单
