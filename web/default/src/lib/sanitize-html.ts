@@ -108,7 +108,11 @@ export function sanitizeHtml(html: string): string {
     el.setAttribute('style', cleanInlineStyle(el.getAttribute('style')))
   })
 
-  return root.innerHTML
+  // DocumentFragment 的 innerHTML 不在 TS DOM 类型声明中（运行时可用），
+  // 移入普通元素后读取序列化结果，避免类型断言
+  const container = document.createElement('div')
+  container.appendChild(root)
+  return container.innerHTML
 }
 
 export default sanitizeHtml

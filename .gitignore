@@ -40,3 +40,6 @@ skills-lock.json
 bin/run.pid
 *.db.bak*
 server*.log
+
+# Local agent skills (dev-only, not part of the project)
+.agents
