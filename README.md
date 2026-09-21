@@ -20,7 +20,7 @@
 | --- | --- |
 | 后端 | Go + Gin + GORM |
 | 数据库 | SQLite / MySQL / PostgreSQL（可选 Redis） |
-| 前端 | `web/classic`（React + JS）、`web/default`（React + TS + Rsbuild + TanStack Router） |
+| 前端 | `web/default`（React + TS + Rsbuild + TanStack Router） |
 | 桌面端 | Electron |
 | 部署 | Docker / Docker Compose，镜像见 `ghcr.io/heqiuyu209/heqiuyu-api` |
 
