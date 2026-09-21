@@ -11,6 +11,7 @@ import (
 // to API clients (end-to-end semantics). Only headers in this list are copied.
 var relayResponseHeaderAllowlist = canonicalHeaderSet(
 	"Content-Type",
+	"Content-Encoding",
 	"Content-Disposition",
 	"Content-Length",
 	"Content-Range",
@@ -97,13 +98,18 @@ func isRelayResponseHeaderAllowed(name string, hopByHop map[string]struct{}) boo
 // hopByHopHeaderNames 解析 Connection 头中声明的逐跳头名。
 func hopByHopHeaderNames(header http.Header) map[string]struct{} {
 	names := make(map[string]struct{})
-	for _, value := range header.Values("Connection") {
-		for _, token := range strings.Split(value, ",") {
-			token = strings.TrimSpace(token)
-			if token == "" {
-				continue
+	for key, values := range header {
+		if !strings.EqualFold(key, "Connection") {
+			continue
+		}
+		for _, value := range values {
+			for _, token := range strings.Split(value, ",") {
+				token = strings.TrimSpace(token)
+				if token == "" {
+					continue
+				}
+				names[http.CanonicalHeaderKey(token)] = struct{}{}
 			}
-			names[http.CanonicalHeaderKey(token)] = struct{}{}
 		}
 	}
 	return names

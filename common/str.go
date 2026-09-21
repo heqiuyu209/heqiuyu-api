@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unsafe"
 
 	"github.com/samber/lo"
 )
@@ -107,11 +106,10 @@ func StringsContains(strs []string, str string) bool {
 	return false
 }
 
-// StringToByteSlice []byte only read, panic on append
+// StringToByteSlice converts string to []byte.
+// 调用方只读该返回切片，禁止 append / 原地修改。
 func StringToByteSlice(s string) []byte {
-	tmp1 := (*[2]uintptr)(unsafe.Pointer(&s))
-	tmp2 := [3]uintptr{tmp1[0], tmp1[1], tmp1[1]}
-	return *(*[]byte)(unsafe.Pointer(&tmp2))
+	return []byte(s)
 }
 
 func EncodeBase64(str string) string {
@@ -222,7 +220,7 @@ func maskKeyHead(body string, maxKeep int) string {
 // www.openai.com -> ***.***.com
 // api.openai.com -> ***.***.com
 // sk-abcd1234efgh -> sk-abcd********
-// AIzaSyAAAaUooTUni8AdaOkSRMda30n_Q4vrV70 -> AIza********
+// Google API keys (AIza prefix) -> AIza********
 // AKIAIOSFODNN7EXAMPLE -> AKIA********
 // Authorization: Bearer ghp_abcdefghijklmnopqrst -> Authorization: Bearer ********
 func MaskSensitiveInfo(str string) string {

@@ -23,13 +23,8 @@ export function Wallet(props: WalletProps) {
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
-  const [billingDialogOpen, setBillingDialogOpen] = useState(
-    () => props.initialShowHistory ?? false
-  )
+  const [billingDialogOpen, setBillingDialogOpen] = useState(false)
   const [redemptionCode, setRedemptionCode] = useState('')
-  const [prevInitialShowHistory, setPrevInitialShowHistory] = useState(
-    props.initialShowHistory
-  )
 
   const {
     affiliateLink,
@@ -56,26 +51,15 @@ export function Wallet(props: WalletProps) {
   }, [])
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      void fetchUser()
-    }, 0)
-    return () => clearTimeout(id)
+    fetchUser()
   }, [fetchUser])
 
-  // Clear the `?show_history` query param without triggering a navigation
   useEffect(() => {
     if (props.initialShowHistory) {
+      setBillingDialogOpen(true)
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [props.initialShowHistory])
-
-  // Open the billing history dialog when the prop is set after mount
-  if (prevInitialShowHistory !== props.initialShowHistory) {
-    setPrevInitialShowHistory(props.initialShowHistory)
-    if (props.initialShowHistory) {
-      setBillingDialogOpen(true)
-    }
-  }
 
   // Handle redemption
   const handleRedeem = async () => {
@@ -136,11 +120,12 @@ export function Wallet(props: WalletProps) {
                         />
                         <Button
                           onClick={handleRedeem}
-                          disabled={!redemptionCode || redeeming}
+                          disabled={redeeming || !redemptionCode}
+                          aria-busy={redeeming}
                           className='shrink-0'
                         >
                           {redeeming && (
-                            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                            <Loader2 className='size-4 animate-spin' />
                           )}
                           {t('Redeem')}
                         </Button>

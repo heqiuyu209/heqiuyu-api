@@ -52,6 +52,25 @@ func denyJSON(c *gin.Context, httpStatus int, messageKey string) {
 	c.Abort()
 }
 
+// sessionAuthVersionValid 校验会话 cookie 中记录的认证版本号是否与数据库当前值一致。
+// 仅在会话中存有版本号时启用（历史会话无版本号则跳过，依赖 30 天 cookie 过期兜底）。
+// 密码变更（ResetUserPasswordByEmail）会使 auth_version 自增，旧会话因此失效（审计报告 R1）。
+func sessionAuthVersionValid(c *gin.Context, session sessions.Session, userId int) bool {
+	v, ok := session.Get(SessionAuthVersionKey).(int)
+	if !ok {
+		return true
+	}
+	cur, err := model.GetUserAuthVersion(userId)
+	if err != nil {
+		// 版本查询失败不阻断请求（主鉴权路径已读库成功），保守放行避免误伤。
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			common.SysLog(fmt.Sprintf("GetUserAuthVersion error for user %d: %s", userId, err.Error()))
+		}
+		return true
+	}
+	return v == cur
+}
+
 // authorize 是唯一的鉴权入口。
 //
 // 它先从会话 cookie 或访问令牌解析出**用户 ID**，再从数据库（经 Redis 缓存）
@@ -74,6 +93,13 @@ func authorize(c *gin.Context, minRole int) (*resolvedIdentity, bool) {
 			return nil, false
 		}
 		userId = id
+		// 密码已变更：旧会话版本号落后于数据库当前值，立即失效
+		if !sessionAuthVersionValid(c, session, userId) {
+			session.Clear()
+			_ = session.Save()
+			denyJSON(c, http.StatusOK, i18n.MsgAuthNotLoggedIn)
+			return nil, false
+		}
 	} else {
 		// 无会话：尝试访问令牌（access token）路径
 		accessToken := c.Request.Header.Get("Authorization")
@@ -211,7 +237,7 @@ func TokenOrUserAuth() func(c *gin.Context) {
 		// Try session auth first (dashboard users), verified against the database
 		// so that a disabled/deleted/demoted account cannot keep using a stale cookie.
 		session := sessions.Default(c)
-		if id, ok := session.Get("id").(int); ok && id > 0 {
+		if id, ok := session.Get("id").(int); ok && id > 0 && sessionAuthVersionValid(c, session, id) {
 			status, role, group, username, err := model.GetUserAuthz(id)
 			if err == nil && status == common.UserStatusEnabled && validUserInfo(username, role) {
 				c.Set("id", id)

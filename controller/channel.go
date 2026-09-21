@@ -406,12 +406,12 @@ func GetChannelKey(c *gin.Context) {
 	// 记录操作日志
 	model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("查看渠道密钥信息 (渠道ID: %d)", channelId))
 
-	// 返回渠道密钥
+	// 返回脱敏后的渠道密钥（完整密钥仅存在于加密落库后的内存中，不再回显）
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "获取成功",
 		"data": map[string]interface{}{
-			"key": channel.Key,
+			"key": model.MaskChannelKey(channel.Key),
 		},
 	})
 }

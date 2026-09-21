@@ -358,6 +358,13 @@ func InitResources() error {
 	// Initialize options, should after model.InitDB()
 	model.InitOptionMap()
 
+	// 渠道 Key 加密迁移：将存量明文 Key 加密落库（幂等，失败仅告警不阻塞启动）
+	if migrated, err := model.MigrateChannelKeysToEncrypted(); err != nil {
+		common.SysLog("failed to migrate channel keys to encrypted storage: " + err.Error())
+	} else if migrated > 0 {
+		common.SysLog(fmt.Sprintf("migrated %d channel keys to encrypted storage", migrated))
+	}
+
 	// 清理旧的磁盘缓存文件
 	common.CleanupOldCacheFiles()
 

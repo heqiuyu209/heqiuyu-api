@@ -2435,6 +2435,8 @@
     "Please enable Two-factor Authentication or Passkey before proceeding": "Please enable Two-factor Authentication or Passkey before proceeding",
     "Please enter a name": "Please enter a name",
     "Please enter a new password": "Please enter a new password",
+"Password must be 8-20 characters": "Password must be 8-20 characters",
+"Password reset successfully": "Password reset successfully",
     "Please enter a redemption code": "Please enter a redemption code",
     "Please enter a valid duration": "Please enter a valid duration",
     "Please enter a valid email address": "Please enter a valid email address",

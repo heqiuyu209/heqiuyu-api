@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Construction } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Markdown } from '@/components/ui/markdown'
+import { sanitizeHtml } from '@/lib/sanitize-html'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PublicLayout } from '@/components/layout'
 import { getAboutContent } from './api'
@@ -98,7 +99,7 @@ export function About() {
         {isHtml ? (
           <div
             className='prose prose-neutral dark:prose-invert max-w-none'
-            dangerouslySetInnerHTML={{ __html: rawContent }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(rawContent) }}
           />
         ) : (
           <Markdown className='prose-neutral dark:prose-invert max-w-none'>

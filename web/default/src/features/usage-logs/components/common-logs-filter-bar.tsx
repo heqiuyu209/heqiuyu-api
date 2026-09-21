@@ -55,7 +55,9 @@ export function CommonLogsFilterBar({
     const { start, end } = getDefaultTimeRange()
     return { startTime: start, endTime: end }
   })
-  const [logType, setLogType] = useState<string>('')
+  const [logType, setLogType] = useState<
+    NonNullable<typeof searchParams.type>[number] | ''
+  >('')
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -176,7 +178,12 @@ export function CommonLogsFilterBar({
         />
         <Select
           value={logType}
-          onValueChange={(v) => setLogType(v === 'all' ? '' : v)}
+          onValueChange={(value) => {
+            const selectedType = LOG_TYPES.find(
+              (type) => String(type.value) === value
+            )
+            setLogType(selectedType ? `${selectedType.value}` : '')
+          }}
         >
           <SelectTrigger className='h-9'>
             <SelectValue placeholder={t('All Types')} />

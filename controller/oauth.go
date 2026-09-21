@@ -4,12 +4,12 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-gonic/gin"
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/i18n"
 	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/heqiuyu/heqiuyu-api/oauth"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -64,8 +64,7 @@ func HandleOAuth(c *gin.Context) {
 	}
 
 	// 2. Check if user is already logged in (bind flow)
-	username := session.Get("username")
-	if username != nil {
+	if session.Get("id") != nil {
 		handleOAuthBind(c, provider)
 		return
 	}
@@ -128,6 +127,22 @@ func HandleOAuth(c *gin.Context) {
 
 // handleOAuthBind handles binding OAuth account to existing user
 func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
+	// Login sessions contain only an ID; reload the account before binding a credential.
+	id, ok := sessions.Default(c).Get("id").(int)
+	if !ok || id <= 0 {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "message": i18n.T(c, i18n.MsgAuthNotLoggedIn)})
+		return
+	}
+	user, err := model.GetUserById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if user.Status != common.UserStatusEnabled {
+		common.ApiErrorI18n(c, i18n.MsgOAuthUserBanned)
+		return
+	}
+
 	if !provider.IsEnabled() {
 		common.ApiErrorI18n(c, i18n.MsgOAuthNotEnabled, providerParams(provider.GetName()))
 		return
@@ -161,16 +176,6 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 		}
 	}
 
-	// Get current user from session
-	session := sessions.Default(c)
-	id := session.Get("id")
-	user := model.User{Id: id.(int)}
-	err = user.FillUserById()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
 	// Handle binding based on provider type
 	if genericProvider, ok := provider.(*oauth.GenericOAuthProvider); ok {
 		// Custom provider: use user_oauth_bindings table
@@ -181,7 +186,7 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 		}
 	} else {
 		// Built-in provider: update user record directly
-		provider.SetProviderUserID(&user, oauthUser.ProviderUserID)
+		provider.SetProviderUserID(user, oauthUser.ProviderUserID)
 		err = user.UpdateOAuthBindings()
 		if err != nil {
 			common.ApiError(c, err)

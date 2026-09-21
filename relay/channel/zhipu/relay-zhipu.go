@@ -30,6 +30,15 @@ import (
 var zhipuTokens sync.Map
 var expSeconds int64 = 24 * 3600
 
+// maskZhipuKey 脱敏智谱 API Key（id.secret 格式），日志只保留前 4 位，防止密钥落盘
+func maskZhipuKey(key string) string {
+	key = strings.TrimSpace(key)
+	if len(key) <= 4 {
+		return "****"
+	}
+	return key[:4] + "***"
+}
+
 func getZhipuToken(apikey string) string {
 	data, ok := zhipuTokens.Load(apikey)
 	if ok {
@@ -41,7 +50,7 @@ func getZhipuToken(apikey string) string {
 
 	split := strings.Split(apikey, ".")
 	if len(split) != 2 {
-		common.SysLog("invalid zhipu key: " + apikey)
+		common.SysLog("invalid zhipu key: " + maskZhipuKey(apikey))
 		return ""
 	}
 

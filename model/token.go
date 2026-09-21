@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/setting/operation_setting"
-	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
 )
 
@@ -272,7 +272,7 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 		// Don't return error - fall through to DB
 	}
 	fromDB = true
-	err = DB.Where(commonKeyCol+" = ?", key).First(&token).Error
+	err = DB.Where(map[string]interface{}{"key": key}).First(&token).Error
 	return token, err
 }
 
@@ -387,7 +387,8 @@ func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
 			common.SysLog("failed to increase token quota cache: " + cacheErr.Error())
 		}
 	}
-	if err := increaseTokenQuota(tokenId, quota); err != nil && common.RedisEnabled {
+	err = increaseTokenQuota(tokenId, quota)
+	if err != nil && common.RedisEnabled {
 		if cacheErr := cacheDecrTokenQuota(key, int64(quota)); cacheErr != nil {
 			common.SysLog("failed to rollback token quota cache: " + cacheErr.Error())
 		}
@@ -415,7 +416,8 @@ func DecreaseTokenQuota(id int, key string, quota int) (err error) {
 			common.SysLog("failed to decrease token quota cache: " + cacheErr.Error())
 		}
 	}
-	if err := decreaseTokenQuota(id, quota); err != nil && common.RedisEnabled {
+	err = decreaseTokenQuota(id, quota)
+	if err != nil && common.RedisEnabled {
 		if cacheErr := cacheIncrTokenQuota(key, int64(quota)); cacheErr != nil {
 			common.SysLog("failed to rollback token quota cache: " + cacheErr.Error())
 		}

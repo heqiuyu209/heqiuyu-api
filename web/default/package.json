@@ -8,6 +8,7 @@
     "build": "rsbuild build",
     "build:check": "tsc -b --force && rsbuild build",
     "typecheck": "tsc -b --force",
+    "test": "bun test tests",
     "lint": "eslint .",
     "preview": "rsbuild preview",
     "format:check": "prettier --check .",

@@ -6,6 +6,8 @@
 #   default password can never be deployed by accident:
 #     POSTGRES_PASSWORD=<a strong password>
 #     REDIS_PASSWORD=<a strong password>
+#     SESSION_SECRET=<at least 32 random characters>
+#     CRYPTO_SECRET=<a separate persistent secret, at least 32 characters>
 #
 # Usage:
 #   1. docker compose -f docker-compose.dev.yml up -d
@@ -34,6 +36,10 @@ services:
     volumes:
       - dev_data:/data
     environment:
+      - "SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET must be set (at least 32 characters)}"
+      - "CRYPTO_SECRET=${CRYPTO_SECRET:?CRYPTO_SECRET must be set (at least 32 characters)}"
+      - "TRUSTED_PROXIES=${TRUSTED_PROXIES:-}"
+      - "COOKIE_SECURE=${COOKIE_SECURE:-false}"
       - "SQL_DSN=postgresql://root:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/heqiuyu-api"
       - "REDIS_CONN_STRING=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379"
       - TZ=Asia/Shanghai

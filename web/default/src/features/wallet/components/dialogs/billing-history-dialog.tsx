@@ -50,7 +50,7 @@ export function BillingHistoryDialog({
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
-  } = useBillingHistory()
+  } = useBillingHistory({ enabled: open })
 
   const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
 

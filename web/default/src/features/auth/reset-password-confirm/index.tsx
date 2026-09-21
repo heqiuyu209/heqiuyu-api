@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { CheckIcon, CopyIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
-import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { useCountdown } from '@/hooks/use-countdown'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -27,7 +25,6 @@ export function ResetPasswordConfirm({
   const navigate = useNavigate()
   const [newPassword, setNewPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
   const {
     secondsLeft,
     isActive,
@@ -42,46 +39,34 @@ export function ResetPasswordConfirm({
       return
     }
 
+    if (!newPassword) {
+      toast.error(t('Please enter a new password'))
+      return
+    }
+    if (newPassword.length < 8 || newPassword.length > 20) {
+      toast.error(t('Password must be 8-20 characters'))
+      return
+    }
+
     startCountdown()
     setLoading(true)
     try {
-      const res = await api.post('/api/user/reset', { email, token }, {
-        skipBusinessError: true,
-      } as Record<string, unknown>)
+      const res = await api.post(
+        '/api/user/reset',
+        { email, token, new_password: newPassword },
+        {
+          skipBusinessError: true,
+        } as Record<string, unknown>
+      )
 
       if (res?.data?.success) {
-        const password = res.data.data
-        setNewPassword(password)
-        const copySuccess = await copyToClipboard(password)
-        if (copySuccess) {
-          toast.success(
-            t('Password reset and copied to clipboard: {{password}}', {
-              password,
-            })
-          )
-        } else {
-          toast.success(t('Password reset: {{password}}', { password }))
-        }
+        toast.success('Password reset successfully')
+        navigate({ to: '/sign-in', replace: true })
       }
     } catch {
       // Errors handled by global interceptor
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function handleCopy() {
-    if (!newPassword) return
-
-    const copySuccess = await copyToClipboard(newPassword)
-    if (copySuccess) {
-      setCopied(true)
-      toast.success(
-        t('Password copied to clipboard: {{password}}', {
-          password: newPassword,
-        })
-      )
-      setTimeout(() => setCopied(false), 2000)
     }
   }
 
@@ -93,9 +78,7 @@ export function ResetPasswordConfirm({
             {t('Reset password')}
           </h2>
           <p className='text-muted-foreground text-left text-sm sm:text-base'>
-            {newPassword
-              ? 'Your password has been reset successfully'
-              : 'Confirm the reset request to generate a new password.'}
+            {t('Please enter a new password')}
           </p>
         </div>
 
@@ -119,54 +102,29 @@ export function ResetPasswordConfirm({
             />
           </div>
 
-          {newPassword && (
-            <div className='space-y-2'>
-              <Label htmlFor='password'>{t('New password')}</Label>
-              <div className='flex gap-2'>
-                <Input
-                  id='password'
-                  value={newPassword}
-                  disabled
-                  className='font-mono'
-                />
-                <Button
-                  type='button'
-                  size='icon'
-                  variant='outline'
-                  onClick={handleCopy}
-                >
-                  {copied ? (
-                    <CheckIcon className='h-4 w-4' />
-                  ) : (
-                    <CopyIcon className='h-4 w-4' />
-                  )}
-                </Button>
-              </div>
-              <p className='text-muted-foreground text-xs'>
-                {t('Password has been copied to clipboard')}
-              </p>
-            </div>
-          )}
+          <div className='space-y-2'>
+            <Label htmlFor='password'>{t('New password')}</Label>
+            <Input
+              id='password'
+              type='password'
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder={t('Please enter a new password')}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t('Password must be 8-20 characters')}
+            </p>
+          </div>
 
           <Button
             className='w-full'
-            onClick={
-              newPassword
-                ? () => navigate({ to: '/sign-in', replace: true })
-                : handleSubmit
-            }
-            disabled={
-              newPassword ? false : loading || isActive || !isValidResetLink
-            }
+            onClick={handleSubmit}
+            disabled={loading || isActive || !isValidResetLink}
           >
-            {newPassword
-              ? 'Return to login'
-              : isActive
-                ? `Retry (${secondsLeft}s)`
-                : 'Confirm reset password'}
+            {isActive ? `Retry (${secondsLeft}s)` : 'Confirm reset password'}
           </Button>
 
-          {!newPassword && (
+          {!isValidResetLink && (
             <Button
               variant='link'
               className='w-full'

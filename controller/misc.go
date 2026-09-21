@@ -327,14 +327,15 @@ func SendPasswordResetEmail(c *gin.Context) {
 }
 
 type PasswordResetRequest struct {
-	Email string `json:"email"`
-	Token string `json:"token"`
+	Email       string `json:"email"`
+	Token       string `json:"token"`
+	NewPassword string `json:"new_password"`
 }
 
 func ResetPassword(c *gin.Context) {
 	var req PasswordResetRequest
 	err := json.NewDecoder(c.Request.Body).Decode(&req)
-	if req.Email == "" || req.Token == "" {
+	if err != nil || req.Email == "" || req.Token == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "无效的参数",
@@ -348,8 +349,22 @@ func ResetPassword(c *gin.Context) {
 		})
 		return
 	}
-	password := common.GenerateVerificationCode(12)
-	err = model.ResetUserPasswordByEmail(req.Email, password)
+	// 由用户自行设置新密码，服务端不再生成并在响应中回传明文密码。
+	if req.NewPassword == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "请设置新密码",
+		})
+		return
+	}
+	if err := common.Validate.Var(req.NewPassword, "required,min=8,max=20"); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "密码长度需为 8-20 位",
+		})
+		return
+	}
+	err = model.ResetUserPasswordByEmail(req.Email, req.NewPassword)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -358,7 +373,6 @@ func ResetPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    password,
 	})
 	return
 }

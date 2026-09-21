@@ -226,8 +226,10 @@ func WarnLegacyOAuthIDs() {
 //   - access_token 是等同于该用户身份的凭据（可绕过会话直接调用管理接口），
 //     一旦随列表返回，任意管理员即可读取 root 的 access_token 并提权到 root
 //     （审计报告 H2）。需要完整行的场景请使用 GetUserById(id, true)。
-const userListColumns = "id, username, display_name, role, status, email, quota, used_quota, request_count, " +
-	"group, aff_code, aff_count, aff_quota, aff_history, inviter_id, remark, created_at, last_login_at"
+var userListColumns = []string{
+	"id", "username", "display_name", "role", "status", "email", "quota", "used_quota", "request_count",
+	"group", "aff_code", "aff_count", "aff_quota", "aff_history", "inviter_id", "remark", "created_at", "last_login_at",
+}
 
 // applyRoleScope 按调用者角色限制可见用户：非 root 只能看到比自己级别低的用户，
 // 与单用户接口 controller.GetUser 的层级校验保持一致。
@@ -388,9 +390,9 @@ func HardDeleteUserById(id int) error {
 func inviteUser(inviterId int) (err error) {
 	// 原子自增，避免整行 Save 覆盖并发发生的余额/状态变更。
 	return DB.Model(&User{}).Where("id = ?", inviterId).Updates(map[string]interface{}{
-		"aff_count":         gorm.Expr("aff_count + 1"),
-		"aff_quota":         gorm.Expr("aff_quota + ?", common.QuotaForInviter),
-		"aff_history":       gorm.Expr("aff_history + ?", common.QuotaForInviter),
+		"aff_count":   gorm.Expr("aff_count + 1"),
+		"aff_quota":   gorm.Expr("aff_quota + ?", common.QuotaForInviter),
+		"aff_history": gorm.Expr("aff_history + ?", common.QuotaForInviter),
 	}).Error
 }
 
@@ -596,6 +598,8 @@ func (user *User) UpdateProfile(updatePassword bool) error {
 			return err
 		}
 		columns["password"] = hashed
+		// 改密即凭据轮换：旧会话 cookie 立即失效（审计报告 R1）
+		columns["auth_version"] = gorm.Expr("auth_version + 1")
 	}
 	return updateColumns(user.Id, columns)
 }
@@ -647,6 +651,8 @@ func (user *User) Edit(updatePassword bool) error {
 			return err
 		}
 		columns["password"] = hashed
+		// 改密即凭据轮换：旧会话 cookie 立即失效（审计报告 R1）
+		columns["auth_version"] = gorm.Expr("auth_version + 1")
 	}
 	return updateColumns(user.Id, columns)
 }
@@ -826,8 +832,27 @@ func ResetUserPasswordByEmail(email string, password string) error {
 	if err != nil {
 		return err
 	}
-	err = DB.Model(&User{}).Where("email = ?", email).Update("password", hashedPassword).Error
-	return err
+	// 改密属于凭据轮换事件：密码更新与 auth_version 自增必须在同一事务内完成，
+	// 使改密前签发的所有登录会话 cookie 立即失效（审计报告 R1）。
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&User{}).Where("email = ?", email).
+			Update("password", hashedPassword).Error; err != nil {
+			return err
+		}
+		return tx.Model(&User{}).Where("email = ?", email).
+			UpdateColumn("auth_version", gorm.Expr("auth_version + 1")).Error
+	})
+}
+
+// GetUserAuthVersion 返回用户当前的认证版本号（供会话 cookie 校验）。
+// 用户不存在时返回 0 与 ErrRecordNotFound。
+func GetUserAuthVersion(userId int) (int, error) {
+	var version int
+	err := DB.Model(&User{}).Where("id = ?", userId).Select("auth_version").Scan(&version).Error
+	if err != nil {
+		return 0, err
+	}
+	return version, nil
 }
 
 func IsAdmin(userId int) bool {
