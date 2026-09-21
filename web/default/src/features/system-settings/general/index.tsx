@@ -9,7 +9,6 @@ import {
 } from './section-registry.tsx'
 
 const defaultGeneralSettings: GeneralSettings = {
-  'theme.frontend': 'default',
   Notice: '',
   SystemName: 'heqiuyu',
   Logo: '',

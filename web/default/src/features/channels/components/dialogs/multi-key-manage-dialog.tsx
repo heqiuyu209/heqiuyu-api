@@ -81,15 +81,18 @@ export function MultiKeyManageDialog({
     useState<MultiKeyConfirmAction | null>(null)
   const [isPerformingAction, setIsPerformingAction] = useState(false)
 
-  // Reset and load data when dialog opens
-  useEffect(() => {
-    if (open && currentRow) {
+  // Reset page/filter when the dialog opens for a (new) channel.
+  // 渲染期依据 prop 变化同步 state，替代 effect 中的 setState
+  const openRowKey = open && currentRow ? String(currentRow.id) : ''
+  const [syncedRowKey, setSyncedRowKey] = useState('')
+
+  if (syncedRowKey !== openRowKey) {
+    setSyncedRowKey(openRowKey)
+    if (openRowKey) {
       setCurrentPage(1)
       setStatusFilter(null)
-      loadKeyStatus(1, pageSize, null)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, currentRow?.id])
+  }
 
   const loadKeyStatus = async (
     page: number = currentPage,
@@ -125,6 +128,17 @@ export function MultiKeyManageDialog({
       setIsLoading(false)
     }
   }
+
+  // Reset and load data when dialog opens
+  useEffect(() => {
+    if (!open || !currentRow) return
+    // 延迟到下一个宏任务再加载，避免在 effect 中同步调用 setState
+    const timer = setTimeout(() => {
+      loadKeyStatus(1, pageSize, null)
+    }, 0)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, currentRow?.id])
 
   const handleStatusFilterChange = (value: string) => {
     const newFilter = value === 'all' ? null : parseInt(value)

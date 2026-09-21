@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -44,12 +44,15 @@ export function SyncWizardDialog({
   const [locale, setLocale] = useState<SyncLocale>('zh')
   const [source, setSource] = useState<SyncSource>('official')
   const [isSyncing, setIsSyncing] = useState(false)
+  const [syncedOpen, setSyncedOpen] = useState(open)
 
   // Get translated options
   const SYNC_SOURCE_OPTIONS = getSyncSourceOptions(t)
   const SYNC_LOCALE_OPTIONS = getSyncLocaleOptions(t)
 
-  useEffect(() => {
+  // Apply the saved options whenever the dialog opens, during render.
+  if (syncedOpen !== open) {
+    setSyncedOpen(open)
     if (open) {
       setLocale(syncWizardOptions.locale || 'zh')
       const preferredSource = SYNC_SOURCE_OPTIONS.find(
@@ -61,7 +64,7 @@ export function SyncWizardDialog({
           : 'official'
       )
     }
-  }, [open, syncWizardOptions, SYNC_SOURCE_OPTIONS])
+  }
 
   const handleSync = async () => {
     setIsSyncing(true)

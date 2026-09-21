@@ -10,7 +10,6 @@
 # Usage:
 #   1. docker compose -f docker-compose.dev.yml up -d
 #   2. cd web/default && bun install && bun run dev
-#      (classic UI instead: cd web/classic && bun install && bun run dev)
 #   3. Open http://localhost:3001 (Rsbuild dev server, API auto-proxied to :3000)
 #
 # Rebuild backend after Go code changes:

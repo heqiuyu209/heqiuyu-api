@@ -70,7 +70,6 @@ export function ApiKeysTable() {
   })
 
   // Fetch data with React Query
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
   const { data, isLoading, isFetching } = useQuery({
     queryKey: [
       'keys',

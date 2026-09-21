@@ -8,9 +8,6 @@ echo "Step 1: Building frontends..."
 cd ../web/default
 bun install
 DISABLE_ESLINT_PLUGIN='true' bun run build
-cd ../classic
-bun install
-bun run build
 cd ../../electron
 
 echo "Step 2: Building Go backend..."

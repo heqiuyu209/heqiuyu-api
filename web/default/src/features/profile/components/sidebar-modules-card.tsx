@@ -126,7 +126,10 @@ export function SidebarModulesCard() {
   }, [])
 
   useEffect(() => {
-    loadConfig()
+    const timer = setTimeout(() => {
+      loadConfig()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [loadConfig])
 
   const toggleSection = (sectionKey: string, val: boolean) => {

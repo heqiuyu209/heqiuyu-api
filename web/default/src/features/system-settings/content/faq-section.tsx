@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import * as z from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -47,6 +47,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { parseOptionList } from '../lib/parse-option-list'
 
 type FAQ = {
   id: number
@@ -75,8 +76,12 @@ type FAQFormValues = z.infer<typeof faqSchema>
 export function FAQSection({ enabled, data }: FAQSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
-  const [faqList, setFaqList] = useState<FAQ[]>([])
+  const [faqList, setFaqList] = useState<FAQ[]>(() =>
+    parseOptionList<FAQ>(data)
+  )
+  const [syncedData, setSyncedData] = useState(data)
   const [isEnabled, setIsEnabled] = useState(enabled)
+  const [syncedEnabled, setSyncedEnabled] = useState(enabled)
   const [hasChanges, setHasChanges] = useState(false)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [showDialog, setShowDialog] = useState(false)
@@ -92,25 +97,16 @@ export function FAQSection({ enabled, data }: FAQSectionProps) {
     },
   })
 
-  useEffect(() => {
-    try {
-      const parsed = JSON.parse(data || '[]')
-      if (Array.isArray(parsed)) {
-        setFaqList(
-          parsed.map((item, idx) => ({
-            ...item,
-            id: item.id || idx + 1,
-          }))
-        )
-      }
-    } catch {
-      setFaqList([])
-    }
-  }, [data])
-
-  useEffect(() => {
+  // 外部配置变化时同步本地可编辑副本：在渲染期同步（React 官方「依据 prop 调整
+  // state」写法），避免在 effect 内同步 setState 触发级联渲染。
+  if (syncedData !== data) {
+    setSyncedData(data)
+    setFaqList(parseOptionList<FAQ>(data))
+  }
+  if (syncedEnabled !== enabled) {
+    setSyncedEnabled(enabled)
     setIsEnabled(enabled)
-  }, [enabled])
+  }
 
   const handleToggleEnabled = async (checked: boolean) => {
     try {

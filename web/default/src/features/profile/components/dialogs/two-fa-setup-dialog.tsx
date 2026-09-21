@@ -112,9 +112,11 @@ export function TwoFASetupDialog({
 
   // Initialize when dialog opens
   useEffect(() => {
-    if (open && !setupData && !initializing) {
+    if (!open || setupData || initializing) return
+    const timer = setTimeout(() => {
       handleSetup()
-    }
+    }, 0)
+    return () => clearTimeout(timer)
   }, [open, setupData, initializing, handleSetup])
 
   return (

@@ -28,12 +28,11 @@
   body {
     /* 星雾底 + 星尘点阵双层背景 */
     background-color: var(--background);
-    background-image:
-      radial-gradient(
-        circle at 1px 1px,
-        color-mix(in oklch, var(--muted-foreground) 14%, transparent) 1px,
-        transparent 1.4px
-      );
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      color-mix(in oklch, var(--muted-foreground) 14%, transparent) 1px,
+      transparent 1.4px
+    );
     background-size: 26px 26px;
     @apply text-foreground has-[div[data-variant='inset']]:bg-sidebar min-h-svh w-full font-sans;
   }
@@ -632,7 +631,9 @@
 @media (hover: hover) {
   .glow-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 0 0 1px var(--ring), 0 12px 32px oklch(0 0 0 / 0.12);
+    box-shadow:
+      0 0 0 1px var(--ring),
+      0 12px 32px oklch(0 0 0 / 0.12);
   }
   .glow-card:hover::before {
     opacity: 1;
@@ -674,11 +675,7 @@
   width: 3px;
   height: 60%;
   border-radius: 999px;
-  background: linear-gradient(
-    180deg,
-    var(--accent) 0%,
-    var(--primary) 100%
-  );
+  background: linear-gradient(180deg, var(--accent) 0%, var(--primary) 100%);
   box-shadow: 0 0 10px color-mix(in oklch, var(--primary) 70%, transparent);
 }
 
@@ -687,4 +684,53 @@
   font-family: var(--font-display);
   font-weight: 650;
   letter-spacing: -0.02em;
+}
+
+/* ---------- 恒星中心「太阳黑子 H」字标（static 档 HTML 复刻） ----------
+   与 3D 纹理 solar-glyph.ts v3 同构：H 不发光，而是恒星表面的一处太阳黑子
+   —— 本影（深蓝黑，非纯黑）+ 一圈冷色半影柔光 + 极细冷色勾线；内壁冷光与
+   方向性内阴影读出刻蚀纵深，横梁只留一条极淡的冷色「光桥」。
+   字形直接使用品牌字体（--font-display = Space Grotesk Variable 700），与 3D
+   档同一字体、同一比例，因此不再需要手工拼装笔画。
+   静态档只在 prefers-reduced-motion / 小屏触屏下出现，故完全不做动画。 */
+.solar-glyph-h {
+  /* 浅色主题的太阳黑子令牌 */
+  --glyph-umbra: rgb(30 36 60);
+  --glyph-umbra-deep: rgb(14 18 36);
+  --glyph-umbra-lift: rgb(46 54 84);
+  --glyph-penumbra: rgb(80 110 180);
+  --glyph-rim: rgb(86 118 190 / 0.42);
+  --glyph-rim-hot: rgb(140 172 235 / 0.55);
+  --glyph-halo: rgb(80 110 180 / 0.12);
+
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(3.4rem, 13vw, 5.6rem);
+  line-height: 1;
+  /* 本影：纵向三段渐变的深蓝黑（background-clip:text 只让渐变落在字形上） */
+  background: linear-gradient(
+    180deg,
+    var(--glyph-umbra-lift) 0%,
+    var(--glyph-umbra-deep) 50%,
+    var(--glyph-umbra-lift) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  /* 极细冷色勾线（外缘）+ 半影柔光：不含暖色、不铺光晕 */
+  -webkit-text-stroke: 1px var(--glyph-rim);
+  filter: drop-shadow(0 0 2px var(--glyph-penumbra))
+    drop-shadow(0 0 7px var(--glyph-halo));
+}
+
+.dark .solar-glyph-h {
+  --glyph-umbra: rgb(10 14 30);
+  --glyph-umbra-deep: rgb(4 7 18);
+  --glyph-umbra-lift: rgb(20 28 52);
+  --glyph-penumbra: rgb(130 175 255);
+  --glyph-rim: rgb(168 205 255 / 0.42);
+  --glyph-rim-hot: rgb(226 240 255 / 0.55);
+  --glyph-halo: rgb(130 175 255 / 0.12);
 }

@@ -34,7 +34,10 @@ export function useTwoFA(enabled = true) {
   }, [enabled])
 
   useEffect(() => {
-    fetchStatus()
+    const timer = setTimeout(() => {
+      fetchStatus()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [fetchStatus])
 
   return {

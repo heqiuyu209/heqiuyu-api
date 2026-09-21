@@ -141,7 +141,8 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const isLoadingData = isLoading || (isFetching && !data)
 
   const table = useReactTable({
-    data: logs as Record<string, unknown>[],
+    // 三种日志记录（UsageLog / MidjourneyLog / TaskLog）共用同一张表，行类型在此收敛
+    data: logs as unknown as Record<string, unknown>[],
     columns: columns as ColumnDef<Record<string, unknown>>[],
     state: {
       columnFilters,
@@ -172,11 +173,10 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
 
     return rows.map((row) => {
       const logType = (row.original as Record<string, unknown>).type as
-        | number
-        | undefined
+        number | undefined
       const borderClass =
         isCommon && logType != null
-          ? logTypeBorderColor[logType] ?? 'border-l-transparent'
+          ? (logTypeBorderColor[logType] ?? 'border-l-transparent')
           : ''
       const tintClass =
         isCommon && logType != null ? (logTypeRowTint[logType] ?? '') : ''
@@ -204,18 +204,14 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
     <>
       <div className='space-y-4'>
         {logCategory === 'common' ? (
-          <div className='rounded-md border bg-card/50 p-3 shadow-xs'>
+          <div className='bg-card/50 rounded-md border p-3 shadow-xs'>
             <CommonLogsFilterBar
               stats={<CommonLogsStats />}
               viewOptions={<DataTableViewOptions table={table} />}
             />
           </div>
         ) : (
-          <DataTableToolbar
-            table={table}
-            filters={[]}
-            customSearch={null}
-          />
+          <DataTableToolbar table={table} filters={[]} customSearch={null} />
         )}
         {isMobile ? (
           <MobileCardList
@@ -236,7 +232,10 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
             <Table>
               <TableHeader className='bg-muted/30 sticky top-0 z-10'>
                 {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id} className='border-l-[3px] border-l-transparent'>
+                  <TableRow
+                    key={headerGroup.id}
+                    className='border-l-[3px] border-l-transparent'
+                  >
                     {headerGroup.headers.map((header) => (
                       <TableHead key={header.id} colSpan={header.colSpan}>
                         {header.isPlaceholder

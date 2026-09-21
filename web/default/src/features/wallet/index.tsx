@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getSelf } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -22,8 +23,13 @@ export function Wallet(props: WalletProps) {
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
-  const [billingDialogOpen, setBillingDialogOpen] = useState(false)
+  const [billingDialogOpen, setBillingDialogOpen] = useState(
+    () => props.initialShowHistory ?? false
+  )
   const [redemptionCode, setRedemptionCode] = useState('')
+  const [prevInitialShowHistory, setPrevInitialShowHistory] = useState(
+    props.initialShowHistory
+  )
 
   const {
     affiliateLink,
@@ -50,15 +56,26 @@ export function Wallet(props: WalletProps) {
   }, [])
 
   useEffect(() => {
-    fetchUser()
+    const id = setTimeout(() => {
+      void fetchUser()
+    }, 0)
+    return () => clearTimeout(id)
   }, [fetchUser])
 
+  // Clear the `?show_history` query param without triggering a navigation
   useEffect(() => {
     if (props.initialShowHistory) {
-      setBillingDialogOpen(true)
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [props.initialShowHistory])
+
+  // Open the billing history dialog when the prop is set after mount
+  if (prevInitialShowHistory !== props.initialShowHistory) {
+    setPrevInitialShowHistory(props.initialShowHistory)
+    if (props.initialShowHistory) {
+      setBillingDialogOpen(true)
+    }
+  }
 
   // Handle redemption
   const handleRedeem = async () => {
@@ -100,7 +117,9 @@ export function Wallet(props: WalletProps) {
                       {t('Redeem Code')}
                     </h3>
                     <p className='text-muted-foreground mt-2 text-sm'>
-                      {t('Enter a redemption code to add quota to your balance')}
+                      {t(
+                        'Enter a redemption code to add quota to your balance'
+                      )}
                     </p>
                   </CardHeader>
                   <CardContent className='space-y-4'>
@@ -117,10 +136,12 @@ export function Wallet(props: WalletProps) {
                         />
                         <Button
                           onClick={handleRedeem}
-                          loading={redeeming}
-                          disabled={!redemptionCode}
+                          disabled={!redemptionCode || redeeming}
                           className='shrink-0'
                         >
+                          {redeeming && (
+                            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                          )}
                           {t('Redeem')}
                         </Button>
                       </div>

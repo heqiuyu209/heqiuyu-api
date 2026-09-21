@@ -15,9 +15,6 @@ const GENERAL_SECTIONS = [
     build: (settings: GeneralSettings) => (
       <SystemInfoSection
         defaultValues={{
-          theme: {
-            frontend: settings['theme.frontend'] as 'default' | 'classic',
-          },
           Notice: settings.Notice,
           SystemName: settings.SystemName,
           Logo: settings.Logo,

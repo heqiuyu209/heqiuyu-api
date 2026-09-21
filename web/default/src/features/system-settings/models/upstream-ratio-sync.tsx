@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckSquare, RefreshCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -141,13 +141,25 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
     enabled: channelDialogOpen,
   })
 
-  // Memoize the channels list so the effect below only re-runs when the query
-  // data actually changes, instead of on every render (the `|| []` fallback
-  // would otherwise produce a new array reference each render).
+  // Memoize the channels list so the endpoint defaults below only change when
+  // the query data actually changes, instead of on every render (the `|| []`
+  // fallback would otherwise produce a new array reference each render).
   const channels = useMemo(() => channelsData?.data ?? [], [channelsData?.data])
 
-  useEffect(() => {
-    if (channels.length === 0) return
+  const channelsKey = useMemo(
+    () =>
+      channels
+        .map(
+          (channel) => `${channel.id}:${getDefaultEndpointForChannel(channel)}`
+        )
+        .join(','),
+    [channels]
+  )
+  const [syncedChannelsKey, setSyncedChannelsKey] = useState(channelsKey)
+
+  // Fill in default endpoints for channels that do not have one yet
+  if (syncedChannelsKey !== channelsKey) {
+    setSyncedChannelsKey(channelsKey)
     setChannelEndpoints((prev) => {
       let mutated = false
       const next = { ...prev }
@@ -159,7 +171,7 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
       }
       return mutated ? next : prev
     })
-  }, [channels])
+  }
 
   const fetchMutation = useMutation({
     mutationFn: fetchUpstreamRatios,

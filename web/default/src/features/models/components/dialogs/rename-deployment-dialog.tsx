@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -30,10 +30,15 @@ export function RenameDeploymentDialog({
   const queryClient = useQueryClient()
   const [name, setName] = useState(currentName || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [syncedOpen, setSyncedOpen] = useState(open)
+  const [syncedName, setSyncedName] = useState(currentName)
 
-  useEffect(() => {
+  // Reset the input whenever the dialog opens or the source name changes.
+  if (syncedOpen !== open || syncedName !== currentName) {
+    setSyncedOpen(open)
+    setSyncedName(currentName)
     if (open) setName(currentName || '')
-  }, [open, currentName])
+  }
 
   const trimmed = name.trim()
 

@@ -66,7 +66,11 @@ export function BalanceQueryDialog({
   useEffect(() => {
     if (!isCodex) return
     if (!open) return
-    handleQueryCodexUsage()
+    // 延迟到下一个宏任务再拉取，避免在 effect 中同步调用 setState
+    const timer = setTimeout(() => {
+      handleQueryCodexUsage()
+    }, 0)
+    return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isCodex])
 

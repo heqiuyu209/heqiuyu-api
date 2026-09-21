@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -21,6 +20,9 @@ interface FooterProps {
   copyright?: string
   className?: string
 }
+
+/** 无自定义栏目时的稳定空引用（避免每次渲染新建数组） */
+const EMPTY_COLUMNS: FooterColumnProps[] = []
 
 function FooterLinkItem(props: { link: FooterLink }) {
   const { t } = useTranslation()
@@ -64,10 +66,7 @@ export function Footer(props: FooterProps) {
   const isDemoSiteMode = Boolean(demoSiteEnabled)
   const currentYear = new Date().getFullYear()
 
-  const fallbackColumns = useMemo<FooterColumnProps[]>(
-    () => [],
-    [t]
-  )
+  const fallbackColumns = EMPTY_COLUMNS
 
   const displayColumns = props.columns ?? fallbackColumns
 
@@ -134,9 +133,7 @@ export function Footer(props: FooterProps) {
             <span className='text-muted-foreground/40 text-xs'>
               {t('Powered by')}{' '}
             </span>
-            <span className='text-xs'>
-              {displayName}
-            </span>
+            <span className='text-xs'>{displayName}</span>
           </div>
         </div>
       </div>

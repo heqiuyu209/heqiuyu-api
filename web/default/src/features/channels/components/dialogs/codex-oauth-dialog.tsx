@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ExternalLink, Copy, Check, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -38,7 +38,10 @@ export function CodexOAuthDialog({
     isCompleting: false,
   })
 
-  useEffect(() => {
+  // 关闭时重置表单：渲染期依据 prop 变化同步 state（替代 effect 中的 setState）
+  const [wasOpen, setWasOpen] = useState(open)
+  if (wasOpen !== open) {
+    setWasOpen(open)
     if (!open) {
       setState({
         authorizeUrl: '',
@@ -47,7 +50,7 @@ export function CodexOAuthDialog({
         isCompleting: false,
       })
     }
-  }, [open])
+  }
 
   const canCopyAuthorizeUrl = Boolean(state.authorizeUrl && !state.isStarting)
   const canComplete = useMemo(

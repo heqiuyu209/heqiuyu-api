@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Layers3,
@@ -77,6 +77,7 @@ export function PrefillGroupManagementDialog({
     group: PrefillGroup | null
   }>({ open: false, group: null })
   const [isDeleting, setIsDeleting] = useState(false)
+  const [syncedOpen, setSyncedOpen] = useState(open)
 
   const {
     data,
@@ -119,12 +120,14 @@ export function PrefillGroupManagementDialog({
     [sortedGroups]
   )
 
-  useEffect(() => {
+  // Clear delete state when the dialog closes, adjusting state during render.
+  if (syncedOpen !== open) {
+    setSyncedOpen(open)
     if (!open) {
       setDeleteState({ open: false, group: null })
       setIsDeleting(false)
     }
-  }, [open])
+  }
 
   const handleDeleteClick = (group: PrefillGroup) => {
     setDeleteState({ open: true, group })

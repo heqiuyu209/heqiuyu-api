@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -34,10 +34,13 @@ export function ExtendDeploymentDialog({
   const queryClient = useQueryClient()
   const [hours, setHours] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [syncedOpen, setSyncedOpen] = useState(open)
 
-  useEffect(() => {
+  // Reset the duration whenever the dialog opens, adjusting state during render.
+  if (syncedOpen !== open) {
+    setSyncedOpen(open)
     if (open) setHours(1)
-  }, [open])
+  }
 
   const { data: detailsRes, isLoading: isLoadingDetails } = useQuery({
     queryKey: ['deployment-details-for-extend', deploymentId],

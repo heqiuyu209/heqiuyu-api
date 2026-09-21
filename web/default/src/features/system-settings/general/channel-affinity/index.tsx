@@ -94,7 +94,19 @@ export function ChannelAffinitySection(props: Props) {
   const [clearRuleName, setClearRuleName] = useState<string | null>(null)
   const [fillTemplateDialogOpen, setFillTemplateDialogOpen] = useState(false)
 
-  useEffect(() => {
+  const defaultValuesKey = JSON.stringify([
+    props.defaultValues['channel_affinity_setting.enabled'],
+    props.defaultValues['channel_affinity_setting.switch_on_success'],
+    props.defaultValues['channel_affinity_setting.max_entries'],
+    props.defaultValues['channel_affinity_setting.default_ttl_seconds'],
+    props.defaultValues['channel_affinity_setting.rules'],
+  ])
+  const [syncedDefaultValuesKey, setSyncedDefaultValuesKey] =
+    useState(defaultValuesKey)
+
+  // Adjust local state when the loaded option values change
+  if (syncedDefaultValuesKey !== defaultValuesKey) {
+    setSyncedDefaultValuesKey(defaultValuesKey)
     setEnabled(props.defaultValues['channel_affinity_setting.enabled'])
     setSwitchOnSuccess(
       props.defaultValues['channel_affinity_setting.switch_on_success']
@@ -114,7 +126,7 @@ export function ChannelAffinitySection(props: Props) {
         2
       )
     )
-  }, [props.defaultValues])
+  }
 
   const refreshCache = useCallback(async () => {
     setCacheLoading(true)
@@ -129,7 +141,10 @@ export function ChannelAffinitySection(props: Props) {
   }, [t])
 
   useEffect(() => {
-    refreshCache()
+    const id = setTimeout(() => {
+      void refreshCache()
+    }, 0)
+    return () => clearTimeout(id)
   }, [refreshCache])
 
   const appendCliTemplates = () => {

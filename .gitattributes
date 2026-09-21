@@ -37,6 +37,5 @@
 electron/** linguist-vendored
 web/** linguist-vendored
 
-# Un-vendor core frontend source to keep JavaScript visible in language stats
-web/src/components/** linguist-vendored=false
-web/src/pages/** linguist-vendored=false
+# Un-vendor core frontend source to keep TypeScript visible in language stats
+web/default/src/** linguist-vendored=false

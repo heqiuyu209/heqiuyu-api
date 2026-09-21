@@ -37,7 +37,7 @@ export function Hero(props: HeroProps) {
             background: 'var(--solar-bg)',
           }}
         >
-          <SolarSystem label='heqiuyu' />
+          <SolarSystem label='H' />
         </div>
       </div>
 

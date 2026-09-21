@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -79,22 +79,24 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
   const availableGroups = groupsData?.data || []
 
   // Initialize form when tag changes
-  useEffect(() => {
-    if (open && currentTag) {
-      setNewTag(currentTag)
+  // 渲染期依据 tag / 查询结果同步表单（替代 effect 中的 setState），key 只由原始值组成
+  const tagModelsRaw = tagModelsData?.data ?? ''
+  const formSyncKey =
+    open && currentTag ? JSON.stringify([currentTag, tagModelsRaw]) : ''
+  const [syncedFormKey, setSyncedFormKey] = useState('')
+
+  if (syncedFormKey !== formSyncKey) {
+    setSyncedFormKey(formSyncKey)
+    if (formSyncKey) {
+      setNewTag(currentTag ?? '')
       setModelMapping('')
       setSelectedGroups([])
       setCustomModel('')
-
-      // Load tag models
-      if (tagModelsData?.data) {
-        const models = tagModelsData.data.split(',').filter(Boolean)
-        setSelectedModels(models)
-      } else {
-        setSelectedModels([])
-      }
+      setSelectedModels(
+        tagModelsRaw ? tagModelsRaw.split(',').filter(Boolean) : []
+      )
     }
-  }, [open, currentTag, tagModelsData])
+  }
 
   const handleAddCustomModel = () => {
     if (!customModel.trim()) return

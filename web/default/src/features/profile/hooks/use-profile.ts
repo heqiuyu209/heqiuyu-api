@@ -102,7 +102,10 @@ export function useProfile() {
 
   // Initial fetch
   useEffect(() => {
-    fetchProfile()
+    const timer = setTimeout(() => {
+      fetchProfile()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [fetchProfile])
 
   return {

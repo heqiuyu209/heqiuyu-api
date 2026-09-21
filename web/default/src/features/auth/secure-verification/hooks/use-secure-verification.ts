@@ -51,7 +51,10 @@ export function useSecureVerification(
   }, [])
 
   useEffect(() => {
-    fetchVerificationMethods()
+    const timer = setTimeout(() => {
+      fetchVerificationMethods()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [fetchVerificationMethods])
 
   const reset = useCallback(() => {

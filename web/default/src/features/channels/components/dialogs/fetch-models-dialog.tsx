@@ -102,13 +102,6 @@ export function FetchModelsDialog({
     })
   }, [fetchedModelSet, redirectSourceKeysSet, searchKeyword, selectedModels])
 
-  useEffect(() => {
-    if (open && currentRow) {
-      handleFetchModels()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, currentRow?.id])
-
   const handleFetchModels = async () => {
     if (!currentRow) return
 
@@ -133,6 +126,16 @@ export function FetchModelsDialog({
       setIsFetching(false)
     }
   }
+
+  useEffect(() => {
+    if (!open || !currentRow) return
+    // 延迟到下一个宏任务再拉取，避免在 effect 中同步调用 setState
+    const timer = setTimeout(() => {
+      handleFetchModels()
+    }, 0)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, currentRow?.id])
 
   const handleSave = async () => {
     if (!currentRow) return

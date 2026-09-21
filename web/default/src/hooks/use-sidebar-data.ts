@@ -13,7 +13,6 @@ import {
   MessageSquare,
   Coins,
 } from 'lucide-react'
-
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'

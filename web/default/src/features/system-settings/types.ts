@@ -28,7 +28,6 @@ export type DeleteLogsResponse = {
 }
 
 export type GeneralSettings = {
-  'theme.frontend': string
   Notice: string
   SystemName: string
   Logo: string

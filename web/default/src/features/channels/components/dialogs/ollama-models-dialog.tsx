@@ -74,6 +74,20 @@ export function OllamaModelsDialog({
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // 关闭时重置状态：渲染期依据 prop 变化同步 state，替代 effect 中的 setState
+  const [wasOpen, setWasOpen] = useState(open)
+  if (wasOpen !== open) {
+    setWasOpen(open)
+    if (!open) {
+      setModels([])
+      setSelected([])
+      setSearch('')
+      setPullName('')
+      setIsPulling(false)
+      setPullProgress(null)
+    }
+  }
+
   const filteredModels = useMemo(() => {
     if (!search.trim()) return models
     const keyword = search.trim().toLowerCase()
@@ -84,25 +98,6 @@ export function OllamaModelsDialog({
     () => parseModelsString(currentRow?.models ?? ''),
     [currentRow?.models]
   )
-
-  useEffect(() => {
-    if (!open) {
-      setModels([])
-      setSelected([])
-      setSearch('')
-      setPullName('')
-      setIsPulling(false)
-      setPullProgress(null)
-      pullAbortRef.current?.abort()
-      pullAbortRef.current = null
-      return
-    }
-
-    if (open && isOllamaChannel && channelId) {
-      void fetchOllamaModels()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, isOllamaChannel, channelId])
 
   const fetchOllamaModels = useCallback(async () => {
     if (!channelId) return
@@ -163,6 +158,23 @@ export function OllamaModelsDialog({
       setIsFetching(false)
     }
   }, [channelId, currentRow, isOllamaChannel, t])
+
+  // 关闭时中断进行中的拉取（只订阅外部副作用，不在此处 setState）
+  useEffect(() => {
+    if (open) return
+    pullAbortRef.current?.abort()
+    pullAbortRef.current = null
+  }, [open])
+
+  useEffect(() => {
+    if (!open || !isOllamaChannel || !channelId) return
+    // 延迟到下一个宏任务再拉取，避免在 effect 中同步调用 setState
+    const timer = setTimeout(() => {
+      void fetchOllamaModels()
+    }, 0)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isOllamaChannel, channelId])
 
   const toggleSelected = (modelId: string, checked: boolean) => {
     setSelected((prev) => {

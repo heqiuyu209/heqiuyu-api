@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Code, Table, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,21 @@ type EditorRow = {
   value: string
 }
 
+/** Returns the parsed rows, or null when the JSON is invalid (keep current rows). */
+function jsonToRows(json: string): EditorRow[] | null {
+  try {
+    if (!json.trim()) return []
+    const parsed = JSON.parse(json)
+    return Object.entries(parsed).map(([key, val], index) => ({
+      id: `${Date.now()}-${index}`,
+      key,
+      value: typeof val === 'object' ? JSON.stringify(val) : String(val),
+    }))
+  } catch (_error) {
+    return null
+  }
+}
+
 export function JsonEditor({
   value,
   onChange,
@@ -47,35 +62,22 @@ export function JsonEditor({
   const [mode, setMode] = useState<'visual' | 'json'>('visual')
   const [rows, setRows] = useState<EditorRow[]>([])
   const [jsonValue, setJsonValue] = useState(value)
+  const [syncedValue, setSyncedValue] = useState(value)
 
   const parseJsonToRows = (json: string) => {
-    try {
-      if (!json.trim()) {
-        setRows([])
-        return
-      }
-      const parsed = JSON.parse(json)
-      const newRows: EditorRow[] = Object.entries(parsed).map(
-        ([key, val], index) => ({
-          id: `${Date.now()}-${index}`,
-          key,
-          value: typeof val === 'object' ? JSON.stringify(val) : String(val),
-        })
-      )
-      setRows(newRows)
-    } catch (_error) {
-      // Invalid JSON, keep current rows
-    }
+    const parsedRows = jsonToRows(json)
+    if (parsedRows) setRows(parsedRows)
   }
 
-  // Parse JSON to rows when value changes externally
-  useEffect(() => {
+  // Adopt the value when it changes externally, keeping local edits otherwise
+  if (syncedValue !== value) {
+    setSyncedValue(value)
     if (value !== jsonValue) {
       setJsonValue(value)
-      parseJsonToRows(value)
+      const parsedRows = jsonToRows(value)
+      if (parsedRows) setRows(parsedRows)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value])
+  }
 
   const convertRowsToJson = (updatedRows: EditorRow[]): string => {
     if (updatedRows.length === 0) {

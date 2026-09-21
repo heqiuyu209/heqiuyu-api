@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type {
   ColumnFiltersState,
   OnChangeFn,
@@ -110,11 +110,13 @@ export function useTableUrlState(
   const [columnFilters, setColumnFilters] =
     useState<ColumnFiltersState>(initialColumnFilters)
 
-  // URL 为单一数据源：仅当 search（URL）变化时同步，避免依赖 initialColumnFilters 造成死循环（config 常为内联引用）
-  useEffect(() => {
+  // URL 为单一数据源：search（URL）变化时在渲染期同步回 state，避免 effect 内同步
+  // setState 触发级联渲染；用 search 做比较键，避免依赖内联引用的 config 造成死循环。
+  const [syncedSearch, setSyncedSearch] = useState(search)
+  if (syncedSearch !== search) {
+    setSyncedSearch(search)
     setColumnFilters(initialColumnFilters)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search])
+  }
 
   const pagination: PaginationState = useMemo(() => {
     const rawPage = (search as SearchRecord)[pageKey]

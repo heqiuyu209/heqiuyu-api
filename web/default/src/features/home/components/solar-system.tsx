@@ -6,9 +6,6 @@ import {
   type ComponentType,
   type ReactElement,
 } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import * as THREE from 'three'
-import { useTheme } from '@/context/theme-provider'
 import {
   OpenAI,
   Claude,
@@ -21,6 +18,19 @@ import {
   Nvidia,
   Cohere,
 } from '@lobehub/icons'
+import { renderToStaticMarkup } from 'react-dom/server'
+import * as THREE from 'three'
+import { useTheme } from '@/context/theme-provider'
+import {
+  GLYPH_BREATH_PERIOD,
+  GLYPH_FONT_STACK,
+  GLYPH_FONT_WEIGHT,
+  GLYPH_WORLD_HEIGHT,
+  ensureGlyphFont,
+  makeSolarGlyphTexture,
+  redrawSolarGlyphTexture,
+  type GlyphColors,
+} from '../lib/solar-glyph'
 
 /**
  * ─────────────────────────────────────────────────────────────
@@ -47,16 +57,96 @@ interface ProviderDef {
 }
 
 const PROVIDERS: ProviderDef[] = [
-  { id: 'openai', name: 'OpenAI', Icon: OpenAI, orbit: 0, radius: 2.05, speed: 1.12, size: 0.52 },
-  { id: 'claude', name: 'Anthropic Claude', Icon: Claude, orbit: 0, radius: 2.45, speed: 0.96, size: 0.58 },
-  { id: 'gemini', name: 'Google Gemini', Icon: Gemini, orbit: 0, radius: 2.85, speed: 0.82, size: 0.52 },
-  { id: 'llama', name: 'Meta Llama', Icon: Meta, orbit: 0, radius: 3.25, speed: 0.71, size: 0.5 },
-  { id: 'mistral', name: 'Mistral AI', Icon: Mistral, orbit: 1, radius: 3.7, speed: 0.63, size: 0.48 },
-  { id: 'grok', name: 'xAI Grok', Icon: Grok, orbit: 1, radius: 4.05, speed: 0.57, size: 0.55 },
-  { id: 'aws', name: 'Amazon Bedrock', Icon: Aws, orbit: 1, radius: 4.42, speed: 0.51, size: 0.58 },
-  { id: 'azure', name: 'Azure OpenAI', Icon: AzureAI, orbit: 2, radius: 4.85, speed: 0.46, size: 0.5 },
-  { id: 'nvidia', name: 'NVIDIA', Icon: Nvidia, orbit: 2, radius: 5.15, speed: 0.42, size: 0.56 },
-  { id: 'cohere', name: 'Cohere', Icon: Cohere, orbit: 2, radius: 5.45, speed: 0.38, size: 0.5 },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    Icon: OpenAI,
+    orbit: 0,
+    radius: 2.05,
+    speed: 1.12,
+    size: 0.52,
+  },
+  {
+    id: 'claude',
+    name: 'Anthropic Claude',
+    Icon: Claude,
+    orbit: 0,
+    radius: 2.45,
+    speed: 0.96,
+    size: 0.58,
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    Icon: Gemini,
+    orbit: 0,
+    radius: 2.85,
+    speed: 0.82,
+    size: 0.52,
+  },
+  {
+    id: 'llama',
+    name: 'Meta Llama',
+    Icon: Meta,
+    orbit: 0,
+    radius: 3.25,
+    speed: 0.71,
+    size: 0.5,
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral AI',
+    Icon: Mistral,
+    orbit: 1,
+    radius: 3.7,
+    speed: 0.63,
+    size: 0.48,
+  },
+  {
+    id: 'grok',
+    name: 'xAI Grok',
+    Icon: Grok,
+    orbit: 1,
+    radius: 4.05,
+    speed: 0.57,
+    size: 0.55,
+  },
+  {
+    id: 'aws',
+    name: 'Amazon Bedrock',
+    Icon: Aws,
+    orbit: 1,
+    radius: 4.42,
+    speed: 0.51,
+    size: 0.58,
+  },
+  {
+    id: 'azure',
+    name: 'Azure OpenAI',
+    Icon: AzureAI,
+    orbit: 2,
+    radius: 4.85,
+    speed: 0.46,
+    size: 0.5,
+  },
+  {
+    id: 'nvidia',
+    name: 'NVIDIA',
+    Icon: Nvidia,
+    orbit: 2,
+    radius: 5.15,
+    speed: 0.42,
+    size: 0.56,
+  },
+  {
+    id: 'cohere',
+    name: 'Cohere',
+    Icon: Cohere,
+    orbit: 2,
+    radius: 5.45,
+    speed: 0.38,
+    size: 0.5,
+  },
 ]
 
 const ORBIT_TILT: Record<0 | 1 | 2, number> = {
@@ -73,8 +163,10 @@ interface SolarPalette {
   dust: string // 星尘
   spriteIcon: string // 行星 SVG 图标色
   glowDot: string // 行星尾迹 / fallback 光点 rgba
-  brandText: string // 恒星中心品牌文字色
+  brandText: string // 恒星中心品牌文字色（多字符回退用）
   brandGlow: string // 恒星中心品牌文字辉光
+  glyphHalo: string // 单字符字标后方的「半影」冷色柔光（非字身自发光）
+  glyph: GlyphColors // 恒星中心「太阳黑子 H」字标配色
 }
 
 const DARK_PALETTE: SolarPalette = {
@@ -86,6 +178,18 @@ const DARK_PALETTE: SolarPalette = {
   glowDot: 'rgba(255,255,255,1)',
   brandText: '#c2d6ff',
   brandGlow: 'rgba(120,170,255,1)',
+  glyphHalo: 'rgba(130,175,255,0.55)',
+  glyph: {
+    umbra: 'rgb(10 14 30)',
+    umbraDeep: 'rgb(4 7 18)',
+    umbraLift: 'rgb(20 28 52)',
+    penumbra: 'rgb(130 175 255)',
+    lipLight: 'rgb(214 232 255)',
+    wallLight: 'rgb(150 190 255)',
+    rim: 'rgb(168 205 255)',
+    rimHot: 'rgb(226 240 255)',
+    bridge: 'rgb(226 240 255)',
+  },
 }
 
 const LIGHT_PALETTE: SolarPalette = {
@@ -97,6 +201,18 @@ const LIGHT_PALETTE: SolarPalette = {
   glowDot: 'rgba(70,95,180,1)',
   brandText: 'rgba(52,66,112,0.78)',
   brandGlow: 'rgba(96,118,196,0.40)',
+  glyphHalo: 'rgba(80,110,180,0.40)',
+  glyph: {
+    umbra: 'rgb(30 36 60)',
+    umbraDeep: 'rgb(14 18 36)',
+    umbraLift: 'rgb(46 54 84)',
+    penumbra: 'rgb(80 110 180)',
+    lipLight: 'rgb(236 242 255)',
+    wallLight: 'rgb(96 132 205)',
+    rim: 'rgb(86 118 190)',
+    rimHot: 'rgb(140 172 235)',
+    bridge: 'rgb(232 240 255)',
+  },
 }
 
 // ---------- 档位检测 ----------
@@ -165,12 +281,11 @@ function makeBrandTexture(
   targetHeight: number,
   dpr: number
 ): { tex: THREE.CanvasTexture; worldW: number; worldH: number } {
-  const fontFamily =
-    "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+  const fontFamily = GLYPH_FONT_STACK
   // 先以 100px 探测文字宽高比（宽/字号）
   const probe = document.createElement('canvas')
   const pctx = probe.getContext('2d')!
-  pctx.font = `600 100px ${fontFamily}`
+  pctx.font = `${GLYPH_FONT_WEIGHT} 100px ${fontFamily}`
   const aspect = Math.max(pctx.measureText(text).width / 100, 0.1)
 
   const fontPx = 128
@@ -182,7 +297,7 @@ function makeBrandTexture(
   c.height = h * dpr
   const ctx = c.getContext('2d')!
   ctx.scale(dpr, dpr)
-  ctx.font = `600 ${fontPx}px ${fontFamily}`
+  ctx.font = `${GLYPH_FONT_WEIGHT} ${fontPx}px ${fontFamily}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillStyle = color
@@ -208,7 +323,9 @@ function iconToTexture(
 ): THREE.Texture | null {
   try {
     const svg = renderToStaticMarkup(
-      <Icon width={128} height={128} color={color} /> as unknown as ReactElement
+      (
+        <Icon width={128} height={128} color={color} />
+      ) as unknown as ReactElement
     )
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -251,16 +368,21 @@ function SolarCanvas({
     const palette = resolvedTheme === 'dark' ? DARK_PALETTE : LIGHT_PALETTE
 
     const particleScale = tier === 'lite' ? 0.5 : 1
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const reduced = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches
 
     const scene = new THREE.Scene()
+    // 相机：用「远机位 + 窄视角」换取更小的透视缩放差。旧参数（z=9 / fov 42°）下
+    // 轨道最前方行星距相机仅 3.55、最后方 14.45，前后视觉尺寸差约 4 倍，行星走到
+    // 前景时会胀成一大块白斑；现在约 2.1 倍（tan(fov/2)*z 不变，构图与粒子大小不变）。
     const camera = new THREE.PerspectiveCamera(
-      42,
+      26,
       mount.clientWidth / Math.max(mount.clientHeight, 1),
       0.1,
       100
     )
-    camera.position.set(0, 1.4, 9)
+    camera.position.set(0, 2.33, 15)
     camera.lookAt(0, 0, 0)
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
@@ -273,20 +395,26 @@ function SolarCanvas({
     const CORE_COUNT = Math.floor(2600 * particleScale)
     const coreGeo = new THREE.BufferGeometry()
     const corePos = new Float32Array(CORE_COUNT * 3)
-    const coreSeeds = new Float32Array(CORE_COUNT * 2)
+    // aSeed = [纬度 u, 环向相位, 径向扰动相位, 基准半径]
+    // 纬度必须存下来：早期实现在每帧用 Math.sin(seed)*2-1 重算并 clamp，
+    // 会让约一半粒子被夹到 u=-1（s=0）而塌缩成中轴上的竖直点列，
+    // 在恒星正中下方显出一条亮线。
+    const coreSeeds = new Float32Array(CORE_COUNT * 4)
     for (let i = 0; i < CORE_COUNT; i++) {
-      const u = Math.random() * 2 - 1
+      const u = Math.min(1, Math.max(-1, Math.random() * 2 - 1))
       const theta = Math.random() * Math.PI * 2
       const r = Math.cbrt(Math.random()) * 1.18
-      const s = Math.sqrt(1 - u * u)
+      const s = Math.sqrt(Math.max(0, 1 - u * u))
       corePos[i * 3] = r * s * Math.cos(theta)
       corePos[i * 3 + 1] = r * u
       corePos[i * 3 + 2] = r * s * Math.sin(theta)
-      coreSeeds[i * 2] = Math.random() * Math.PI * 2
-      coreSeeds[i * 2 + 1] = Math.random() * Math.PI * 2
+      coreSeeds[i * 4] = u
+      coreSeeds[i * 4 + 1] = theta
+      coreSeeds[i * 4 + 2] = Math.random() * Math.PI * 2
+      coreSeeds[i * 4 + 3] = r
     }
     coreGeo.setAttribute('position', new THREE.BufferAttribute(corePos, 3))
-    coreGeo.setAttribute('aSeed', new THREE.BufferAttribute(coreSeeds, 2))
+    coreGeo.setAttribute('aSeed', new THREE.BufferAttribute(coreSeeds, 4))
     const coreMat = new THREE.PointsMaterial({
       size: 0.055,
       map: makeDotTexture(),
@@ -311,46 +439,73 @@ function SolarCanvas({
     coreGlow.scale.set(4.6, 4.6, 1)
     scene.add(coreGlow)
 
-    // ── 恒星中心品牌文字（3D，与行星同空间 → 真实凌星遮挡） ──
+    // ── 恒星中心字标（3D，与行星同空间 → 靠深度排序自然产生凌星遮挡） ──
+    // 单字符走 v3「太阳黑子 H」；多字符回退原文字渲染。
+    let brandSprite: THREE.Sprite | null = null
+    let brandGlowSprite: THREE.Sprite | null = null
+    let brandTex: THREE.CanvasTexture | null = null
+    let brandBaseW = 0
+    let brandBaseH = 0
+    let glyphRedrawCancelled = false
     if (brand) {
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
-      const { tex: brandTex, worldW, worldH } = makeBrandTexture(
-        brand,
-        palette.brandText,
-        0.58,
-        dpr
-      )
-      // 文字辉光（垫在文字后方弱化一层）
-      const brandGlowSprite = new THREE.Sprite(
+      const isSingle = brand.trim().length === 1
+      const made = isSingle
+        ? makeSolarGlyphTexture(palette.glyph, GLYPH_WORLD_HEIGHT, dpr)
+        : makeBrandTexture(brand, palette.brandText, 0.58, dpr)
+      brandTex = made.tex
+      brandBaseW = made.worldW
+      brandBaseH = made.worldH
+
+      // 品牌字体（Space Grotesk Variable）可能晚于首帧加载：先以回退字形绘制，
+      // 字体就绪后在同一张画布上重绘，避免字标空白或出现字形跳变。
+      if (isSingle) {
+        void ensureGlyphFont().then(() => {
+          if (glyphRedrawCancelled || !brandTex) return
+          redrawSolarGlyphTexture(brandTex, palette.glyph)
+        })
+      }
+
+      // 字标后方「半影」：H 本身是负形不发光，这里只在黑子周围透出一小片
+      // 冷色柔光，让字身沉进等离子而不是贴在表面（内敛，不含暖色）。
+      brandGlowSprite = new THREE.Sprite(
         new THREE.SpriteMaterial({
-          map: makeGlowTexture(palette.brandGlow),
+          map: makeGlowTexture(
+            isSingle ? palette.glyphHalo : palette.brandGlow
+          ),
           transparent: true,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
-          opacity: 0.55,
+          opacity: isSingle ? 0.14 : 0.55,
         })
       )
-      brandGlowSprite.scale.set(worldW * 2.4, worldH * 2.6, 1)
+      brandGlowSprite.scale.set(
+        made.worldW * 2.0,
+        made.worldH * (isSingle ? 1.7 : 2.6),
+        1
+      )
       brandGlowSprite.position.z = -0.06
-      brandGlowSprite.renderOrder = 5
       scene.add(brandGlowSprite)
 
-      // 文字本体
-      const brandSprite = new THREE.Sprite(
+      // 字标本体
+      brandSprite = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: brandTex,
           transparent: true,
           depthWrite: false,
-          alphaTest: 0.05,
+          alphaTest: 0.02,
         })
       )
-      brandSprite.scale.set(worldW, worldH, 1)
-      brandSprite.renderOrder = 10
+      brandSprite.scale.set(brandBaseW, brandBaseH, 1)
       scene.add(brandSprite)
     }
 
     // ── 轨道粒子环 + 行星 ──
-    const orbitGroups: Record<0 | 1 | 2, THREE.Group> = { 0: new THREE.Group(), 1: new THREE.Group(), 2: new THREE.Group() }
+    const orbitGroups: Record<0 | 1 | 2, THREE.Group> = {
+      0: new THREE.Group(),
+      1: new THREE.Group(),
+      2: new THREE.Group(),
+    }
     ;(Object.keys(orbitGroups) as unknown as (0 | 1 | 2)[]).forEach((k) => {
       orbitGroups[k].rotation.set(ORBIT_TILT[k], 0, 0)
       scene.add(orbitGroups[k])
@@ -373,7 +528,11 @@ function SolarCanvas({
         pts.push(Math.cos(a) * r, 0, Math.sin(a) * r)
       }
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3))
-      const mat = new THREE.LineBasicMaterial({ color: palette.orbitLine, transparent: true, opacity: 0.22 })
+      const mat = new THREE.LineBasicMaterial({
+        color: palette.orbitLine,
+        transparent: true,
+        opacity: 0.22,
+      })
       const ring = new THREE.LineLoop(geo, mat)
       orbitGroups[orbit].add(ring)
     })
@@ -381,7 +540,12 @@ function SolarCanvas({
     // 行星 sprite + 尾迹
     const dot = makeGlowTexture(palette.glowDot)
     const planetSprites: THREE.Sprite[] = []
-    const planetData: { def: ProviderDef; angle: number; sprite: THREE.Sprite; group: THREE.Group }[] = []
+    const planetData: {
+      def: ProviderDef
+      angle: number
+      sprite: THREE.Sprite
+      group: THREE.Group
+    }[] = []
 
     PROVIDERS.forEach((def) => {
       const tex = iconToTexture(def.Icon, palette.spriteIcon)
@@ -395,18 +559,19 @@ function SolarCanvas({
       )
       sprite.scale.set(def.size, def.size, 1)
 
-      // 底部光圈（贴合行星下缘的横向柔光）
+      // 底部光圈（贴合行星下缘的横向柔光）：只作"受光"暗示，压低亮度与尺寸，
+      // 否则行星走到前景时这层加色柔光会糊成一块白斑、把图标吞掉。
       const trail = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: dot,
           transparent: true,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
-          opacity: 0.35,
+          opacity: 0.16,
         })
       )
-      trail.scale.set(def.size * 2.0, def.size * 1.0, 1)
-      trail.position.set(0, -def.size * 0.95, 0)
+      trail.scale.set(def.size * 1.55, def.size * 0.7, 1)
+      trail.position.set(0, -def.size * 0.8, 0)
 
       const group = new THREE.Group()
       group.add(sprite)
@@ -493,14 +658,14 @@ function SolarCanvas({
       // 恒星粒子表面扰动
       const posAttr = coreGeo.attributes.position as THREE.BufferAttribute
       const pos = posAttr.array as Float32Array
-      const seeds = (coreGeo.attributes.aSeed as THREE.BufferAttribute).array as Float32Array
+      const seeds = (coreGeo.attributes.aSeed as THREE.BufferAttribute)
+        .array as Float32Array
       for (let i = 0; i < CORE_COUNT; i++) {
-        const baseR = 1.18 * Math.cbrt(((i * 9301 + 49297) % 1000) / 1000 + 1e-6)
-        const u = Math.sin(seeds[i * 2]) * 2 - 1
-        const s = Math.sqrt(1 - u * u)
-        const a = seeds[i * 2 + 1] + t * 0.6
-        const wob = 0.06 * Math.sin(seeds[i] + t * 1.4)
-        const r = baseR + wob
+        const u = seeds[i * 4]
+        const s = Math.sqrt(Math.max(0, 1 - u * u))
+        const a = seeds[i * 4 + 1] + t * 0.6
+        const wob = 0.06 * Math.sin(seeds[i * 4 + 2] + t * 1.4)
+        const r = seeds[i * 4 + 3] + wob
         pos[i * 3] = r * s * Math.cos(a)
         pos[i * 3 + 1] = r * u
         pos[i * 3 + 2] = r * s * Math.sin(a)
@@ -510,6 +675,16 @@ function SolarCanvas({
       const coreRot = t * 0.05
       corePoints.rotation.y = coreRot
       coreGlow.material.rotation = coreRot
+
+      // 字标呼吸：只让「半影」柔光微亮，字身不发光（opacity 恒定，保持可读性）
+      if (brandSprite && brandGlowSprite) {
+        const breathe = Math.sin((t * Math.PI * 2) / GLYPH_BREATH_PERIOD)
+        const k = 1 + breathe * 0.008
+        brandSprite.scale.set(brandBaseW * k, brandBaseH * k, 1)
+        ;(brandSprite.material as THREE.SpriteMaterial).opacity = 1
+        ;(brandGlowSprite.material as THREE.SpriteMaterial).opacity =
+          0.14 + breathe * 0.05
+      }
 
       // 行星公转
       hoveredName = hoveredRef.current
@@ -525,7 +700,9 @@ function SolarCanvas({
         const base = pd.def.size
         pd.sprite.scale.set(base * next, base * next, 1)
         // 尾迹随速度淡（受光）
-        ;(pd.group.children[1] as THREE.Sprite).material.opacity = paused ? 0.12 : 0.35
+        ;(pd.group.children[1] as THREE.Sprite).material.opacity = paused
+          ? 0.06
+          : 0.16
 
         pd.group.position.set(
           Math.cos(pd.angle) * pd.def.radius,
@@ -541,8 +718,16 @@ function SolarCanvas({
 
       // 视差（full 档）
       if (tier === 'full') {
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, mouse.x * 0.9, dt * 2)
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 1.4 + mouse.y * 0.6, dt * 2)
+        camera.position.x = THREE.MathUtils.lerp(
+          camera.position.x,
+          mouse.x * 0.9,
+          dt * 2
+        )
+        camera.position.y = THREE.MathUtils.lerp(
+          camera.position.y,
+          2.33 + mouse.y * 0.6,
+          dt * 2
+        )
         camera.lookAt(0, 0, 0)
       }
 
@@ -550,7 +735,8 @@ function SolarCanvas({
       if (hasHover && pointer.lengthSq() > 0.0001) {
         raycaster.setFromCamera(pointer, camera)
         const hits = raycaster.intersectObjects(planetSprites)
-        const name = hits.length > 0 ? (hits[0].object.userData.name as string) : null
+        const name =
+          hits.length > 0 ? (hits[0].object.userData.name as string) : null
         if (name !== hoveredRef.current) {
           hoveredRef.current = name
           onHover(name)
@@ -592,21 +778,27 @@ function SolarCanvas({
     window.addEventListener('resize', onResize)
 
     return () => {
+      glyphRedrawCancelled = true
       cancelAnimationFrame(raf)
       io.disconnect()
       window.removeEventListener('resize', onResize)
       renderer.domElement.removeEventListener('pointermove', onPointerMove)
       renderer.domElement.removeEventListener('pointerleave', onPointerLeave)
+      brandTex?.dispose()
       renderer.dispose()
       mount.removeChild(renderer.domElement)
     }
-  }, [onHover, resolvedTheme])
+  }, [brand, onHover, resolvedTheme])
 
   return <div ref={mountRef} className={className} />
 }
 
 // ---------- 静态视图（移动端 / reduced-motion） ----------
-function StaticSolar({ icons }: { icons: Record<string, ComponentType<Record<string, unknown>>> }) {
+function StaticSolar({
+  icons,
+}: {
+  icons: Record<string, ComponentType<Record<string, unknown>>>
+}) {
   const orbitCounts: Record<0 | 1 | 2, number> = { 0: 0, 1: 0, 2: 0 }
   const positions = PROVIDERS.map((p) => {
     const idx = orbitCounts[p.orbit]++
@@ -616,18 +808,23 @@ function StaticSolar({ icons }: { icons: Record<string, ComponentType<Record<str
   })
 
   const orbits = [0, 1, 2].map((k) => {
-    const maxR = Math.max(...PROVIDERS.filter((p) => p.orbit === k).map((p) => p.radius))
+    const maxR = Math.max(
+      ...PROVIDERS.filter((p) => p.orbit === k).map((p) => p.radius)
+    )
     return { tilt: ORBIT_TILT[k as 0 | 1 | 2] * (180 / Math.PI), radius: maxR }
   })
 
   return (
     <div className='relative flex h-full w-full items-center justify-center overflow-hidden'>
       {/* 恒星核心光晕 */}
-      <div className='bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklch,var(--primary)_60%,transparent)_0%,color-mix(in_oklch,var(--accent)_34%,transparent)_48%,transparent_72%)] pointer-events-none absolute top-1/2 left-1/2 size-[min(62vw,380px)] -translate-x-1/2 -translate-y-1/2 blur-[2px]' />
+      <div className='pointer-events-none absolute top-1/2 left-1/2 size-[min(62vw,380px)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklch,var(--primary)_60%,transparent)_0%,color-mix(in_oklch,var(--accent)_34%,transparent)_48%,transparent_72%)] blur-[2px]' />
 
       {/* 轨道 + 行星（椭圆透视） */}
       <div className='pointer-events-none absolute inset-0 flex items-center justify-center'>
-        <div className='relative size-[min(92vw,620px)]' style={{ transform: 'scaleY(0.68)' }}>
+        <div
+          className='relative size-[min(92vw,620px)]'
+          style={{ transform: 'scaleY(0.68)' }}
+        >
           {orbits.map((o, i) => (
             <div
               key={i}
@@ -647,11 +844,17 @@ function StaticSolar({ icons }: { icons: Record<string, ComponentType<Record<str
             return (
               <div
                 key={p.id}
-                className='absolute top-1/2 left-1/2'
-                style={{ transform: `translate(calc(-50% + ${x}%), calc(-50% + ${y}%))` }}
+                className='absolute'
+                style={{
+                  // 注意：translate 的百分比按元素自身尺寸解析（行星只有 20~30px），
+                  // 必须用 left/top 的百分比（相对轨道容器）才能真正分布到轨道上。
+                  left: `${50 + x}%`,
+                  top: `${50 + y}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
               >
                 <div className='grid size-[clamp(20px,3.2vw,30px)] place-items-center rounded-full bg-[color-mix(in_oklch,var(--background)_88%,transparent)] shadow-[0_0_16px_color-mix(in_oklch,var(--accent)_60%,transparent)] ring-1 ring-[color-mix(in_oklch,var(--primary)_25%,transparent)]'>
-                  <span className='scale-[0.55] text-foreground/90'>
+                  <span className='text-foreground/90 scale-[0.55]'>
                     <Ico width={40} height={40} />
                   </span>
                 </div>
@@ -673,7 +876,9 @@ export function SolarSystem({
   label?: string
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
-  const [tier, setTier] = useState<Tier>('full')
+  // 首帧即按设备能力选定档位：惰性初始化避免「先 full 再纠正」的额外渲染
+  // （detectTier 内部对 window 缺失已有兜底）。
+  const [tier] = useState<Tier>(() => detectTier())
   const iconMap: Record<string, ComponentType<Record<string, unknown>>> = {
     openai: OpenAI,
     claude: Claude,
@@ -687,16 +892,16 @@ export function SolarSystem({
     cohere: Cohere,
   }
 
-  useEffect(() => {
-    setTier(detectTier())
-  }, [])
-
   const handleHover = useCallback((name: string | null) => setHovered(name), [])
 
   return (
     <div className={`relative h-full w-full overflow-hidden ${className}`}>
       {(tier === 'full' || tier === 'lite') && (
-        <SolarCanvas className='absolute inset-0' onHover={handleHover} brand={label} />
+        <SolarCanvas
+          className='absolute inset-0'
+          onHover={handleHover}
+          brand={label}
+        />
       )}
       {tier === 'static' && (
         <>
@@ -705,10 +910,17 @@ export function SolarSystem({
           {/* 恒星中心字标（静态档无 3D，保留 HTML 层） */}
           {label && (
             <div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center'>
-              <div className='bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklch,var(--primary)_55%,transparent)_0%,color-mix(in_oklch,var(--accent)_30%,transparent)_45%,transparent_72%)] absolute size-[min(58vw,340px)] blur-[2px]' />
-              <span className='brand-wordmark text-[clamp(1.6rem,6vw,2.8rem)] text-foreground drop-shadow-[0_0_22px_color-mix(in_oklch,var(--primary)_70%,transparent)]'>
-                {label}
-              </span>
+              <div className='absolute size-[min(58vw,340px)] bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklch,var(--primary)_55%,transparent)_0%,color-mix(in_oklch,var(--accent)_30%,transparent)_45%,transparent_72%)] blur-[2px]' />
+              {label.trim().length === 1 ? (
+                // 单字符：与 3D 档共用字体与比例的「太阳黑子 H」纯 CSS 复刻
+                <span className='solar-glyph-h' aria-hidden='true'>
+                  {label}
+                </span>
+              ) : (
+                <span className='brand-wordmark text-foreground text-[clamp(1.6rem,6vw,2.8rem)] drop-shadow-[0_0_22px_color-mix(in_oklch,var(--primary)_70%,transparent)]'>
+                  {label}
+                </span>
+              )}
             </div>
           )}
         </>
@@ -717,7 +929,7 @@ export function SolarSystem({
       {/* hover 名称浮层 */}
       {hovered && (
         <div className='pointer-events-none absolute bottom-[16%] left-1/2 z-30 -translate-x-1/2'>
-          <span className='border border-border/50 bg-background/70 px-3 py-1 text-xs font-medium text-foreground shadow-lg backdrop-blur-sm'>
+          <span className='border-border/50 bg-background/70 text-foreground border px-3 py-1 text-xs font-medium shadow-lg backdrop-blur-sm'>
             {hovered}
           </span>
         </div>

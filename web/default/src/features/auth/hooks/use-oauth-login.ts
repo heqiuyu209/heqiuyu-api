@@ -29,9 +29,12 @@ export function useOAuthLogin(status: SystemStatus | null) {
   const { auth } = useAuthStore()
 
   useEffect(() => {
-    setGithubButtonText(t('Continue with GitHub'))
+    const timer = setTimeout(() => {
+      setGithubButtonText(t('Continue with GitHub'))
+    }, 0)
 
     return () => {
+      clearTimeout(timer)
       if (githubTimeoutRef.current) {
         clearTimeout(githubTimeoutRef.current)
       }

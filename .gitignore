@@ -9,11 +9,10 @@ build
 *.db-journal
 logs
 web/default/dist
-web/classic/dist
 web/node_modules
 web/dist
-# Bun (bun.lock) is the authoritative package manager for web/default and web/classic.
-# npm lockfiles are not used there (web/classic/.gitignore already ignores its own copy).
+# Bun (bun.lock) is the authoritative package manager for web/default.
+# npm lockfiles are not used there.
 web/default/package-lock.json
 .env
 heqiuyu-api

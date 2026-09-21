@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ApiKeysDeleteDialog } from './api-keys-delete-dialog'
 import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { useApiKeys } from './api-keys-provider'
@@ -11,14 +11,17 @@ export function ApiKeysDialogs() {
   )
   const mutateSide =
     open === 'create' ? 'left' : open === 'update' ? 'right' : lastMutateSide
+  const [syncedOpen, setSyncedOpen] = useState(open)
 
-  useEffect(() => {
+  // Remember the side used by the last mutate dialog, during render.
+  if (syncedOpen !== open) {
+    setSyncedOpen(open)
     if (open === 'create') {
       setLastMutateSide('left')
     } else if (open === 'update') {
       setLastMutateSide('right')
     }
-  }, [open])
+  }
 
   return (
     <>

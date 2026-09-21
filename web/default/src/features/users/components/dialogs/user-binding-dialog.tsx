@@ -190,14 +190,19 @@ export function UserBindingDialog(props: Props) {
   }, [props.userId, t])
 
   useEffect(() => {
-    if (props.open && props.userId) {
-      setShowBoundOnly(true)
-      fetchData()
-    } else {
-      setUser(null)
-      setOauthBindings([])
-      setStatusInfo({})
-    }
+    // Deferred so the effect never calls setState synchronously (fetchData itself
+    // sets the loading flag as soon as it is invoked).
+    const timer = setTimeout(() => {
+      if (props.open && props.userId) {
+        setShowBoundOnly(true)
+        fetchData()
+      } else {
+        setUser(null)
+        setOauthBindings([])
+        setStatusInfo({})
+      }
+    }, 0)
+    return () => clearTimeout(timer)
   }, [props.open, props.userId, fetchData])
 
   const allBindings = useMemo<BindingItem[]>(() => {

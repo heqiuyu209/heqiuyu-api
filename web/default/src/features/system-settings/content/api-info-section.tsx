@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import * as z from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -54,6 +54,7 @@ import {
 import { StatusBadge } from '@/components/status-badge'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { parseOptionList } from '../lib/parse-option-list'
 
 type ApiInfo = {
   id: number
@@ -99,8 +100,12 @@ export function ApiInfoSection({ enabled, data }: ApiInfoSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
   const apiInfoSchema = createApiInfoSchema(t)
-  const [apiInfoList, setApiInfoList] = useState<ApiInfo[]>([])
+  const [apiInfoList, setApiInfoList] = useState<ApiInfo[]>(() =>
+    parseOptionList<ApiInfo>(data)
+  )
+  const [syncedData, setSyncedData] = useState(data)
   const [isEnabled, setIsEnabled] = useState(enabled)
+  const [syncedEnabled, setSyncedEnabled] = useState(enabled)
   const [hasChanges, setHasChanges] = useState(false)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [showDialog, setShowDialog] = useState(false)
@@ -118,25 +123,16 @@ export function ApiInfoSection({ enabled, data }: ApiInfoSectionProps) {
     },
   })
 
-  useEffect(() => {
-    try {
-      const parsed = JSON.parse(data || '[]')
-      if (Array.isArray(parsed)) {
-        setApiInfoList(
-          parsed.map((item, idx) => ({
-            ...item,
-            id: item.id || idx + 1,
-          }))
-        )
-      }
-    } catch {
-      setApiInfoList([])
-    }
-  }, [data])
-
-  useEffect(() => {
+  // 外部配置变化时同步本地可编辑副本：在渲染期同步（React 官方「依据 prop 调整
+  // state」写法），避免在 effect 内同步 setState 触发级联渲染。
+  if (syncedData !== data) {
+    setSyncedData(data)
+    setApiInfoList(parseOptionList<ApiInfo>(data))
+  }
+  if (syncedEnabled !== enabled) {
+    setSyncedEnabled(enabled)
     setIsEnabled(enabled)
-  }, [enabled])
+  }
 
   const handleToggleEnabled = async (checked: boolean) => {
     try {

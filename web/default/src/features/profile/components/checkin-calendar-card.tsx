@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   CalendarDays,
@@ -50,7 +50,7 @@ export function CheckinCalendarCard({
   const [checkinLoading, setCheckinLoading] = useState(false)
   const [turnstileModalVisible, setTurnstileModalVisible] = useState(false)
   const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0)
-  const [initialLoaded, setInitialLoaded] = useState(false)
+  const [collapsedInitialized, setCollapsedInitialized] = useState(false)
   const [collapsed, setCollapsed] = useState<boolean>(false)
 
   const currentMonthStr = useMemo(() => {
@@ -60,7 +60,6 @@ export function CheckinCalendarCard({
   }, [currentMonth])
 
   // Fetch checkin status
-  /* eslint-disable @tanstack/query/exhaustive-deps */
   const {
     data: checkinData,
     isLoading,
@@ -77,7 +76,6 @@ export function CheckinCalendarCard({
     enabled: checkinEnabled,
     staleTime: 30000,
   })
-  /* eslint-enable @tanstack/query/exhaustive-deps */
 
   const checkinRecordsMap = useMemo(() => {
     const map: Record<string, number> = {}
@@ -104,13 +102,11 @@ export function CheckinCalendarCard({
   const checkedToday = checkinData?.stats?.checked_in_today === true
   const todayAward = checkinRecordsMap[todayString]
 
-  useEffect(() => {
-    if (initialLoaded) return
-    if (isLoading) return
-    if (!checkinData) return
+  // Initialize the collapsed state once, from the first loaded check-in status
+  if (!collapsedInitialized && !isLoading && checkinData) {
+    setCollapsedInitialized(true)
     setCollapsed(checkedToday)
-    setInitialLoaded(true)
-  }, [checkinData, checkedToday, initialLoaded, isLoading])
+  }
 
   const shouldTriggerTurnstile = useCallback(
     (message?: string) => {

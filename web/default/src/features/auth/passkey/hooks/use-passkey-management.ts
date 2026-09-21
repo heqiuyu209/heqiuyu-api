@@ -52,7 +52,10 @@ export function usePasskeyManagement(
   }, [onStatusChange])
 
   useEffect(() => {
-    fetchStatus()
+    const timer = setTimeout(() => {
+      fetchStatus()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [fetchStatus])
 
   useEffect(() => {

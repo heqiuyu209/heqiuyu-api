@@ -83,13 +83,14 @@ export function UserAuthForm({
     (requiresLegalConsent && !agreedToLegal)
   const hasWeChatLogin = Boolean(status?.wechat_login)
 
-  useEffect(() => {
-    if (requiresLegalConsent) {
-      setAgreedToLegal(false)
-    } else {
-      setAgreedToLegal(true)
-    }
-  }, [requiresLegalConsent])
+  // Sync the consent checkbox whenever the (async-loaded) consent requirement changes
+  const [syncedRequiresLegalConsent, setSyncedRequiresLegalConsent] = useState<
+    boolean | null
+  >(null)
+  if (syncedRequiresLegalConsent !== requiresLegalConsent) {
+    setSyncedRequiresLegalConsent(requiresLegalConsent)
+    setAgreedToLegal(!requiresLegalConsent)
+  }
 
   useEffect(() => {
     detectPasskeySupport()

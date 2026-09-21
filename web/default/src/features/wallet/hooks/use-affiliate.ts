@@ -64,7 +64,10 @@ export function useAffiliate() {
   }, [])
 
   useEffect(() => {
-    fetchAffiliateCode()
+    const timer = setTimeout(() => {
+      fetchAffiliateCode()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [fetchAffiliateCode])
 
   return {

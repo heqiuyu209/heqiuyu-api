@@ -226,7 +226,7 @@ export function ModelMutateDrawer({
   }
 
   // Load model data for editing and ratio configuration
-  useEffect(() => {
+  const applyModelData = useCallback(() => {
     if (open && isEditing && modelData?.data) {
       const model = modelData.data
       setOldModelName(model.model_name)
@@ -357,6 +357,13 @@ export function ModelMutateDrawer({
       })
     }
   }, [open, isEditing, modelData, currentRow, form, modelSettings])
+
+  // Apply the loaded model data one tick after commit so that the effect body
+  // itself never calls setState synchronously.
+  useEffect(() => {
+    const timer = setTimeout(applyModelData, 0)
+    return () => clearTimeout(timer)
+  }, [applyModelData])
 
   const onSubmit = useCallback(
     async (values: ExtendedModelFormValues): Promise<void> => {
