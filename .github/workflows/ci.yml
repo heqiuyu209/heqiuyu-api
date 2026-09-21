@@ -29,12 +29,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # Go embeds both UIs; frontend builds are verified separately below.
+      # Go embeds the default UI (see main.go); frontend builds are verified separately below.
       - name: Prepare frontend embed placeholders
         run: |
-          mkdir -p web/default/dist web/classic/dist
+          mkdir -p web/default/dist
           printf '<!doctype html><title>CI</title>' > web/default/dist/index.html
-          printf '<!doctype html><title>CI</title>' > web/classic/dist/index.html
 
       # All three commands run from the repository root (the Go module root).
       - name: Build
@@ -92,9 +91,8 @@ jobs:
 
       - name: Prepare frontend embed placeholders
         run: |
-          mkdir -p web/default/dist web/classic/dist
+          mkdir -p web/default/dist
           printf '<!doctype html><title>CI</title>' > web/default/dist/index.html
-          printf '<!doctype html><title>CI</title>' > web/classic/dist/index.html
 
       - name: Run govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
@@ -153,12 +151,4 @@ jobs:
 
       - name: Build default frontend
         working-directory: web/default
-        run: bun run build
-
-      - name: Install classic dependencies
-        working-directory: web/classic
-        run: bun install --frozen-lockfile
-
-      - name: Build classic frontend
-        working-directory: web/classic
         run: bun run build
