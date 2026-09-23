@@ -85,12 +85,23 @@ func (t *TwoFA) Create() error {
 	return DB.Create(t).Error
 }
 
-// Update 更新2FA设置
+// Update 更新2FA设置（仅更新业务列）
+// 使用 Updates 而非 Save：GORM v1.25.2 的 Save 在 UPDATE 影响 0 行时会转为 INSERT，
+// 而 DisableTwoFA 对记录做硬删除（Unscoped().Delete），并发下 Save 会把已删除的 2FA
+// 记录"复活"（连同 is_enabled=true 与旧 secret）。Updates 永不触发 INSERT。
 func (t *TwoFA) Update() error {
 	if t.Id == 0 {
 		return errors.New("2FA记录ID不能为空")
 	}
-	return DB.Save(t).Error
+	updates := map[string]interface{}{
+		"secret":          t.Secret,
+		"is_enabled":      t.IsEnabled,
+		"failed_attempts": t.FailedAttempts,
+		"locked_until":    t.LockedUntil,
+		"last_used_at":    t.LastUsedAt,
+		"updated_at":      time.Now(),
+	}
+	return DB.Model(&TwoFA{}).Where("id = ?", t.Id).Updates(updates).Error
 }
 
 // Delete 删除2FA设置
@@ -118,17 +129,39 @@ func (t *TwoFA) ResetFailedAttempts() error {
 	return t.Update()
 }
 
-// IncrementFailedAttempts 增加失败尝试次数
-func (t *TwoFA) IncrementFailedAttempts() error {
-	t.FailedAttempts++
+func incrementFailedAttemptsUpdate(db *gorm.DB, id int, lockUntil time.Time) *gorm.DB {
+	lockCondition := "failed_attempts + 1 >= ?"
+	if db.Dialector.Name() == "mysql" {
+		// GORM sorts map keys, so failed_attempts is assigned before locked_until.
+		// MySQL evaluates single-table UPDATE assignments from left to right, which
+		// means this expression observes the already-incremented value.
+		lockCondition = "failed_attempts >= ?"
+	}
 
-	// 检查是否需要锁定
+	return db.Model(&TwoFA{}).Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"failed_attempts": gorm.Expr("failed_attempts + 1"),
+			"locked_until":    gorm.Expr("CASE WHEN "+lockCondition+" THEN ? ELSE locked_until END", common.MaxFailAttempts, lockUntil),
+		})
+}
+
+// IncrementFailedAttempts 增加失败尝试次数（单条原子 SQL，避免并发竞态）
+// 一条语句内同时自增并按下一次阈值置锁。MySQL 的同表 UPDATE 赋值会读取
+// 前面已更新的值，因此由 incrementFailedAttemptsUpdate 按方言调整条件。
+func (t *TwoFA) IncrementFailedAttempts() error {
+	lockUntil := time.Now().Add(time.Duration(common.LockoutDuration) * time.Second)
+	err := incrementFailedAttemptsUpdate(DB, t.Id, lockUntil).Error
+	if err != nil {
+		return err
+	}
+
+	// 同步内存状态，保持调用方后续读取一致
+	t.FailedAttempts++
 	if t.FailedAttempts >= common.MaxFailAttempts {
-		lockUntil := time.Now().Add(time.Duration(common.LockoutDuration) * time.Second)
 		t.LockedUntil = &lockUntil
 	}
 
-	return t.Update()
+	return nil
 }
 
 // IsLocked 检查账户是否被锁定

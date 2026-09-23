@@ -471,6 +471,7 @@ func RelayTaskFetch(c *gin.Context) {
 	}
 	if taskErr := relay.RelayTaskFetch(c, relayInfo.RelayMode); taskErr != nil {
 		respondTaskError(c, taskErr)
+		return
 	}
 }
 
