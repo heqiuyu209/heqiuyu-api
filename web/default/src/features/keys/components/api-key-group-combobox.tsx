@@ -33,7 +33,10 @@ type ApiKeyGroupComboboxProps = {
   disabled?: boolean
 }
 
-function formatGroupRatio(ratio: ApiKeyGroupOption['ratio'], ratioLabel: string) {
+function formatGroupRatio(
+  ratio: ApiKeyGroupOption['ratio'],
+  ratioLabel: string
+) {
   if (ratio === undefined || ratio === null || ratio === '') return null
   return `${ratio}x ${ratioLabel}`
 }

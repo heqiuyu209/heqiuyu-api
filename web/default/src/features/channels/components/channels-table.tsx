@@ -52,7 +52,9 @@ import { DataTableBulkActions } from './data-table-bulk-actions'
 const route = getRouteApi('/_authenticated/channels/')
 
 function isDisabledChannelRow(channel: Channel) {
-  return !isTagAggregateRow(channel) && channel.status !== CHANNEL_STATUS.ENABLED
+  return (
+    !isTagAggregateRow(channel) && channel.status !== CHANNEL_STATUS.ENABLED
+  )
 }
 
 export function ChannelsTable() {
@@ -375,7 +377,7 @@ export function ChannelsTable() {
                         data-state={row.getIsSelected() && 'selected'}
                         className={cn(
                           isDisabledChannelRow(row.original) &&
-                            'bg-muted/85 hover:bg-muted dark:bg-zinc-700/55 dark:hover:bg-zinc-700/70 [&>td:first-child]:border-l-4 [&>td:first-child]:border-l-muted-foreground/35 [&>td:first-child]:pl-1 dark:[&>td:first-child]:border-l-zinc-300/70'
+                            'bg-muted/85 hover:bg-muted [&>td:first-child]:border-l-muted-foreground/35 dark:bg-zinc-700/55 dark:hover:bg-zinc-700/70 [&>td:first-child]:border-l-4 [&>td:first-child]:pl-1 dark:[&>td:first-child]:border-l-zinc-300/70'
                         )}
                       >
                         {row.getVisibleCells().map((cell) => (

@@ -51,13 +51,19 @@ export function Wallet(props: WalletProps) {
   }, [])
 
   useEffect(() => {
-    fetchUser()
+    const timeoutId = window.setTimeout(() => {
+      void fetchUser()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
   }, [fetchUser])
 
   useEffect(() => {
     if (props.initialShowHistory) {
-      setBillingDialogOpen(true)
+      const timeoutId = window.setTimeout(() => {
+        setBillingDialogOpen(true)
+      }, 0)
       window.history.replaceState({}, '', window.location.pathname)
+      return () => window.clearTimeout(timeoutId)
     }
   }, [props.initialShowHistory])
 

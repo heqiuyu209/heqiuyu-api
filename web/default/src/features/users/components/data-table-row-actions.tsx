@@ -12,7 +12,6 @@ import {
   KeyRound,
   ShieldAlert,
 } from 'lucide-react'
-
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -253,7 +252,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         userId={user.id}
         onUnbindSuccess={triggerRefresh}
       />
-
     </>
   )
 }

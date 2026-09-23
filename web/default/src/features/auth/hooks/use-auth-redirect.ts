@@ -40,8 +40,7 @@ export function useAuthRedirect() {
 
         // Restore saved language preference
         const savedLang = (user as Record<string, unknown>).language as
-          | string
-          | undefined
+          string | undefined
         if (savedLang && savedLang !== i18n.language) {
           i18n.changeLanguage(savedLang)
         }

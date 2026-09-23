@@ -32,7 +32,7 @@ export function Hero(props: HeroProps) {
       {/* 天体系统视窗（深空星窗） */}
       <div className='relative z-10 mx-auto w-full max-w-5xl'>
         <div
-          className='relative h-[480px] w-full overflow-hidden rounded-[2rem] border border-border/40 sm:h-[560px] md:h-[620px]'
+          className='border-border/40 relative h-[480px] w-full overflow-hidden rounded-[2rem] border sm:h-[560px] md:h-[620px]'
           style={{
             background: 'var(--solar-bg)',
           }}

@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { cn } from '@/lib/utils'
 import { sanitizeHtml } from '@/lib/sanitize-html'
+import { cn } from '@/lib/utils'
 import { useSystemConfig } from '@/hooks/use-system-config'
 
 interface FooterLink {

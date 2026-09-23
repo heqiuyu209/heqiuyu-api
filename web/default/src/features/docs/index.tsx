@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Card } from '@/components/ui/card'
-import { PublicLayout } from '@/components/layout'
 import { Markdown } from '@/components/ui/markdown'
+import { PublicLayout } from '@/components/layout'
 import { apiGuideMarkdown } from './guide-content'
 
 /**

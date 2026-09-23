@@ -31,13 +31,13 @@ export function Glow({ className, variant, ...props }: GlowProps) {
     >
       <div
         className={cn(
-          'absolute left-1/2 h-[256px] w-[60%] -translate-x-1/2 scale-[2.5] rounded-[50%] bg-radial from-primary/45 from-10% to-primary/0 to-60% opacity-40 sm:h-[512px] dark:opacity-70',
+          'from-primary/45 to-primary/0 absolute left-1/2 h-[256px] w-[60%] -translate-x-1/2 scale-[2.5] rounded-[50%] bg-radial from-10% to-60% opacity-40 sm:h-[512px] dark:opacity-70',
           variant === 'center' && '-translate-y-1/2'
         )}
       />
       <div
         className={cn(
-          'absolute left-1/2 h-[128px] w-[40%] -translate-x-1/2 scale-200 rounded-[50%] bg-radial from-accent/35 from-10% to-accent/0 to-60% opacity-30 sm:h-[256px] dark:opacity-60',
+          'from-accent/35 to-accent/0 absolute left-1/2 h-[128px] w-[40%] -translate-x-1/2 scale-200 rounded-[50%] bg-radial from-10% to-60% opacity-30 sm:h-[256px] dark:opacity-60',
           variant === 'center' && '-translate-y-1/2'
         )}
       />

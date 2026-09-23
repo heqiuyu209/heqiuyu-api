@@ -178,11 +178,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
             label={label}
             variant={
               (config.color === 'error' ? 'danger' : config.color) as
-                | 'neutral'
-                | 'success'
-                | 'warning'
-                | 'danger'
-                | 'info'
+                'neutral' | 'success' | 'warning' | 'danger' | 'info'
             }
             size='sm'
           />
@@ -489,11 +485,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
               label={config?.label || String(qt)}
               variant={
                 (config?.color === 'error' ? 'danger' : config?.color) as
-                  | 'neutral'
-                  | 'success'
-                  | 'warning'
-                  | 'danger'
-                  | 'info'
+                  'neutral' | 'success' | 'warning' | 'danger' | 'info'
               }
               size='sm'
             />

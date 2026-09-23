@@ -16,8 +16,8 @@ import {
   codeToHtml,
   type ShikiTransformer,
 } from 'shiki/bundle/web'
-import { cn } from '@/lib/utils'
 import { sanitizeHtml } from '@/lib/sanitize-html'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {

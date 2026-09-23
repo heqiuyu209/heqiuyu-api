@@ -21,7 +21,7 @@ export function Header({ className, children, ...props }: HeaderProps) {
       {/* 星舰仪表带：顶部靛蓝辉光线 */}
       <span
         aria-hidden
-        className='absolute inset-x-0 -bottom-px h-px bg-linear-to-r from-transparent via-oklch(0.52 0.15 268 / 0.55) to-transparent'
+        className='via-oklch(0.52 0.15 268 / 0.55) absolute inset-x-0 -bottom-px h-px bg-linear-to-r from-transparent to-transparent'
       />
     </header>
   )
