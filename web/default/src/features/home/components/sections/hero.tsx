@@ -16,17 +16,11 @@ export function Hero(props: HeroProps) {
 
   return (
     <section className='relative z-10 flex flex-col items-center overflow-hidden px-4 pt-14 pb-16 md:px-6 md:pt-16 md:pb-24'>
-      {/* 背景径向光（陪衬，微弱） */}
+      {/* 背景径向光（陪衬，微弱）。样式在 styles/index.css 的 .solar-hero-aurora，
+          以便为不支持 oklch() 的旧浏览器提供 rgba 降级。 */}
       <div
         aria-hidden
-        className='pointer-events-none absolute inset-0 -z-10 opacity-25 dark:opacity-[0.12]'
-        style={{
-          background: [
-            'radial-gradient(ellipse 60% 50% at 20% 20%, oklch(0.72 0.18 250 / 80%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 50% 40% at 80% 15%, oklch(0.65 0.15 200 / 60%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 40% 35% at 50% 80%, oklch(0.70 0.12 280 / 40%) 0%, transparent 70%)',
-          ].join(', '),
-        }}
+        className='solar-hero-aurora pointer-events-none absolute inset-0 -z-10 opacity-25 dark:opacity-[0.12]'
       />
 
       {/* 天体系统视窗（深空星窗） */}

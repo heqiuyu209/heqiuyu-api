@@ -11,7 +11,7 @@ import {
   type ExpandedState,
   type Row,
 } from '@tanstack/react-table'
-import { useDebounce, useMediaQuery } from '@/hooks'
+import { useDebounce, useIsMobile } from '@/hooks'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
@@ -60,7 +60,7 @@ function isDisabledChannelRow(channel: Channel) {
 export function ChannelsTable() {
   const { t } = useTranslation()
   const { enableTagMode, idSort } = useChannels()
-  const isMobile = useMediaQuery('(max-width: 640px)')
+  const isMobile = useIsMobile()
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([])

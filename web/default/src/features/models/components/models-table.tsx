@@ -8,7 +8,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table'
-import { useMediaQuery } from '@/hooks'
+import { useIsMobile } from '@/hooks'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
@@ -44,7 +44,7 @@ const route = getRouteApi('/_authenticated/models/$section')
 export function ModelsTable() {
   const { t } = useTranslation()
   const { selectedVendor } = useModels()
-  const isMobile = useMediaQuery('(max-width: 640px)')
+  const isMobile = useIsMobile()
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([])

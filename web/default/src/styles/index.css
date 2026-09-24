@@ -734,3 +734,103 @@
   --glyph-rim-hot: rgb(226 240 255 / 0.55);
   --glyph-halo: rgb(130 175 255 / 0.12);
 }
+
+/* ---------- 天体系统：color-mix() / oklch() 不可用时的降级 ----------
+   以下装饰原先写成 color-mix(in oklch, …)：color-mix() 需要 Chrome 111+ /
+   Safari 16.2+ / Firefox 113+。不支持的浏览器会**整条声明被丢弃**，表现为
+   「没有核心光晕、没有轨道环、行星只剩一块实心」，与正常机器差异极大。
+   这里先用 rgba() 给出观感接近的底色，支持时再用 @supports 精确覆盖。 */
+.solar-core-halo {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgb(86 118 190 / 0.6) 0%,
+    rgb(96 150 190 / 0.34) 48%,
+    transparent 72%
+  );
+}
+.solar-orbit-ring {
+  border-color: rgb(96 150 190 / 0.3);
+}
+.solar-planet-chip {
+  background: rgb(255 255 255 / 0.88);
+  box-shadow: 0 0 16px rgb(96 150 190 / 0.6);
+  --tw-ring-color: rgb(86 118 190 / 0.25);
+}
+.dark .solar-planet-chip {
+  background: rgb(20 24 40 / 0.88);
+}
+.solar-glyph-halo {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgb(86 118 190 / 0.55) 0%,
+    rgb(96 150 190 / 0.3) 45%,
+    transparent 72%
+  );
+}
+/* hero 背景光：hero.tsx 原先用内联 oklch()，旧浏览器整条 background 失效 */
+.solar-hero-aurora {
+  background:
+    radial-gradient(
+      ellipse 60% 50% at 20% 20%,
+      rgb(96 140 235 / 0.5) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 50% 40% at 80% 15%,
+      rgb(70 160 205 / 0.38) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 40% 35% at 50% 80%,
+      rgb(130 110 220 / 0.26) 0%,
+      transparent 70%
+    );
+}
+
+@supports (color: color-mix(in oklch, red 50%, transparent)) {
+  .solar-core-halo {
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in oklch, var(--primary) 60%, transparent) 0%,
+      color-mix(in oklch, var(--accent) 34%, transparent) 48%,
+      transparent 72%
+    );
+  }
+  .solar-orbit-ring {
+    border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+  }
+  .solar-planet-chip {
+    background: color-mix(in oklch, var(--background) 88%, transparent);
+    box-shadow: 0 0 16px color-mix(in oklch, var(--accent) 60%, transparent);
+    --tw-ring-color: color-mix(in oklch, var(--primary) 25%, transparent);
+  }
+  .solar-glyph-halo {
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in oklch, var(--primary) 55%, transparent) 0%,
+      color-mix(in oklch, var(--accent) 30%, transparent) 45%,
+      transparent 72%
+    );
+  }
+}
+
+@supports (color: oklch(0.5 0.1 200)) {
+  .solar-hero-aurora {
+    background:
+      radial-gradient(
+        ellipse 60% 50% at 20% 20%,
+        oklch(0.72 0.18 250 / 80%) 0%,
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 50% 40% at 80% 15%,
+        oklch(0.65 0.15 200 / 60%) 0%,
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 40% 35% at 50% 80%,
+        oklch(0.7 0.12 280 / 40%) 0%,
+        transparent 70%
+      );
+  }
+}

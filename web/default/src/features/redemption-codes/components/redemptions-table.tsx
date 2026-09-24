@@ -13,7 +13,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { useMediaQuery } from '@/hooks'
+import { useIsMobile } from '@/hooks'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
@@ -46,7 +46,7 @@ export function RedemptionsTable() {
   const { t } = useTranslation()
   const columns = useRedemptionsColumns()
   const { refreshTrigger } = useRedemptions()
-  const isMobile = useMediaQuery('(max-width: 640px)')
+  const isMobile = useIsMobile()
   const [rowSelection, setRowSelection] = useState({})
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})

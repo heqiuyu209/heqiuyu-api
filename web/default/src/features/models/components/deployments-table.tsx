@@ -7,7 +7,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table'
-import { useMediaQuery } from '@/hooks'
+import { useIsMobile } from '@/hooks'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -54,7 +54,7 @@ const route = getRouteApi('/_authenticated/models/$section')
 export function DeploymentsTable() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const isMobile = useMediaQuery('(max-width: 640px)')
+  const isMobile = useIsMobile()
 
   // URL state (use dedicated keys so it won't collide with metadata table)
   const {

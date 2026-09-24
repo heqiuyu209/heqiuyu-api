@@ -8,7 +8,8 @@ export function Header({ className, children, ...props }: HeaderProps) {
   return (
     <header
       className={cn(
-        'bg-background/85 z-50 h-16 shrink-0 border-b backdrop-blur-md',
+        // 高度随顶部安全区自适应：无刘海时 env() 为 0，等价于原来的 h-16
+        'bg-background/85 z-50 h-[calc(4rem+env(safe-area-inset-top))] shrink-0 border-b pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] backdrop-blur-md',
         className
       )}
       {...props}

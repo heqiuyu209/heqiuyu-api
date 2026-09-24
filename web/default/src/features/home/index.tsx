@@ -15,7 +15,7 @@ export function Home() {
   if (!isLoaded) {
     return (
       <PublicLayout showMainContainer={false}>
-        <main className='flex min-h-screen items-center justify-center'>
+        <main className='flex min-h-dvh items-center justify-center'>
           <div className='text-muted-foreground'>{t('Loading...')}</div>
         </main>
       </PublicLayout>
@@ -29,7 +29,7 @@ export function Home() {
           {isUrl ? (
             <iframe
               src={content}
-              className='h-screen w-full border-none'
+              className='h-dvh w-full border-none'
               title={t('Custom Home Page')}
             />
           ) : (

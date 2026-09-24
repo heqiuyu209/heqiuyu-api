@@ -80,9 +80,20 @@ export function PublicHeader(props: PublicHeaderProps) {
     }
   }, [mobileOpen])
 
+  // Esc 关闭移动导航
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [mobileOpen])
+
   return (
     <>
-      <header className='pointer-events-none fixed inset-x-0 top-0 z-50'>
+      {/* 刘海/圆角避让依赖 index.html 的 viewport-fit=cover */}
+      <header className='pointer-events-none fixed inset-x-0 top-0 z-50 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]'>
         <div
           className={cn(
             'pointer-events-auto mx-auto transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]',
@@ -199,6 +210,8 @@ export function PublicHeader(props: PublicHeaderProps) {
                 className='hover:bg-muted/40 flex size-9 items-center justify-center rounded-lg transition-colors'
                 onClick={() => setMobileOpen((v) => !v)}
                 aria-label={t('Toggle navigation menu')}
+                aria-expanded={mobileOpen}
+                aria-controls='mobile-nav-overlay'
               >
                 <div className='relative size-4'>
                   <span
@@ -228,15 +241,23 @@ export function PublicHeader(props: PublicHeaderProps) {
 
       {/* Mobile full-screen overlay */}
       <div
+        id='mobile-nav-overlay'
+        // 关闭时不仅要透明，还必须移出可访问性树与 Tab 顺序，
+        // 否则隐藏的菜单链接仍然可以被键盘聚焦（inert 同时阻止聚焦与点击）
+        aria-hidden={!mobileOpen}
+        inert={!mobileOpen}
         className={cn(
-          'bg-background/98 fixed inset-0 z-40 backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] sm:pointer-events-none sm:hidden',
+          'bg-background/98 fixed inset-0 z-40 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] sm:pointer-events-none sm:hidden',
           mobileOpen
             ? 'pointer-events-auto opacity-100'
             : 'pointer-events-none opacity-0'
         )}
       >
         <div className='flex h-full flex-col justify-between px-8 pt-20 pb-10'>
-          <nav className='flex flex-col gap-1'>
+          <nav
+            aria-label={t('Toggle navigation menu')}
+            className='flex flex-col gap-1'
+          >
             {links.map((link, i) => {
               const isActive = pathname === link.href
               return (

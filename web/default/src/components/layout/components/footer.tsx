@@ -84,7 +84,7 @@ export function Footer(props: FooterProps) {
     <footer
       className={cn('border-border/40 relative z-10 border-t', props.className)}
     >
-      <div className='mx-auto max-w-6xl px-6 py-12 md:py-16'>
+      <div className='mx-auto max-w-6xl px-6 pt-12 pb-[calc(3rem+env(safe-area-inset-bottom))] md:pt-16 md:pb-[calc(4rem+env(safe-area-inset-bottom))]'>
         <div className='flex flex-col justify-between gap-10 md:flex-row md:gap-16'>
           {/* Brand column */}
           <div className='shrink-0'>

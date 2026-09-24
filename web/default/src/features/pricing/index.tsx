@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useMediaQuery } from '@/hooks'
+import { useIsMobile } from '@/hooks'
 import { useTranslation } from 'react-i18next'
 import { PublicLayout } from '@/components/layout'
 import { PageTransition } from '@/components/page-transition'
@@ -19,7 +19,7 @@ import { usePricingData } from './hooks/use-pricing-data'
 export function Pricing() {
   const { t } = useTranslation()
   const navigate = useNavigate({ from: '/pricing/' })
-  const isMobile = useMediaQuery('(max-width: 640px)')
+  const isMobile = useIsMobile()
 
   const {
     models,

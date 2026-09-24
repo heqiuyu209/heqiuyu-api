@@ -21,6 +21,7 @@ import {
 import { renderToStaticMarkup } from 'react-dom/server'
 import * as THREE from 'three'
 import { useTheme } from '@/context/theme-provider'
+import { MOBILE_BREAKPOINT } from '@/hooks/use-mobile'
 import {
   GLYPH_BREATH_PERIOD,
   GLYPH_FONT_STACK,
@@ -155,6 +156,12 @@ const ORBIT_TILT: Record<0 | 1 | 2, number> = {
   2: 0.13,
 }
 
+/**
+ * 静态档轨道椭圆的纵向压缩比。仅用于「轨道环 + 行星位置」的透视效果，
+ * 行星图标必须用 1/ORBIT_PERSPECTIVE 反向抵消，否则品牌 logo 会被压成椭圆。
+ */
+const ORBIT_PERSPECTIVE = 0.68
+
 // ---------- 主题调色板 ----------
 interface SolarPalette {
   coreParticle: string // 恒星粒子色
@@ -216,13 +223,61 @@ const LIGHT_PALETTE: SolarPalette = {
 }
 
 // ---------- 档位检测 ----------
+
+/** WebGL 上下文可用性（结果缓存，探测用的上下文立即释放） */
+let webglAvailable: boolean | null = null
+
+/**
+ * isWebGLAvailable — 探测当前环境能否创建 WebGL 上下文。
+ *
+ * 为什么必须探测：硬件加速被关闭、远程桌面 / 虚拟机、老 GPU、浏览器禁用 WebGL 的机器上
+ * `new THREE.WebGLRenderer()` 会抛异常。React 会把 effect 里抛出的异常交给最近的错误边界
+ * （本项目的根路由 errorComponent），结果是**整个首页被错误页替换**，而不是退化成静态档。
+ * 探测结果缓存，避免每次渲染都创建 canvas。
+ */
+function isWebGLAvailable(): boolean {
+  if (webglAvailable !== null) return webglAvailable
+  if (typeof document === 'undefined') {
+    webglAvailable = false
+    return webglAvailable
+  }
+  try {
+    const canvas = document.createElement('canvas')
+    const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
+    if (gl) {
+      // 释放探测上下文：浏览器同时允许的 WebGL context 数量有限
+      const loseContext = gl.getExtension('WEBGL_lose_context') as {
+        loseContext: () => void
+      } | null
+      loseContext?.loseContext()
+    }
+    webglAvailable = gl !== null
+  } catch {
+    webglAvailable = false
+  }
+  return webglAvailable
+}
+
+/**
+ * markWebGLUnavailable — 渲染失败或上下文丢失后把 WebGL 永久标记为不可用。
+ *
+ * 必须「粘住」：否则窗口 resize 会再次走 detectTier() → isWebGLAvailable() 返回缓存的 true
+ * → 重新挂载 SolarCanvas → 再次失败，出现反复升降档的闪烁。
+ * 代价是驱动重置后本次会话不再尝试 3D，刷新页面即可恢复。
+ */
+function markWebGLUnavailable(): void {
+  webglAvailable = false
+}
+
 function detectTier(): Tier {
   if (typeof window === 'undefined') return 'static'
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const coarse = window.matchMedia('(pointer: coarse)').matches
-  const small = window.innerWidth < 768
+  const small = window.innerWidth < MOBILE_BREAKPOINT
   if (reduced) return 'static'
   if (coarse && small) return 'static'
+  // 没有可用的 WebGL 时直接降级 static：绝不能让 WebGLRenderer 的异常冒泡到路由错误边界。
+  if (!isWebGLAvailable()) return 'static'
   // 低配桌面 / 触屏设备 → 减粒子
   const cores = navigator.hardwareConcurrency || 8
   if (coarse || cores < 4) return 'lite'
@@ -347,22 +402,24 @@ function SolarCanvas({
   className,
   onHover,
   brand,
+  tier,
+  onUnsupported,
 }: {
   className?: string
   onHover: (name: string | null) => void
   brand?: string
+  /** 档位由父组件统一决定（唯一真相来源），避免父子两次判定不一致导致画布空白 */
+  tier: Tier
+  /** WebGL 不可用 / 上下文丢失时通知父组件降级到 static 档 */
+  onUnsupported: () => void
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null)
-  const tierRef = useRef<Tier>('full')
   const hoveredRef = useRef<string | null>(null)
   const { resolvedTheme } = useTheme()
 
   useEffect(() => {
     const mount = mountRef.current
     if (!mount) return
-
-    const tier = detectTier()
-    tierRef.current = tier
     if (tier === 'static') return
 
     const palette = resolvedTheme === 'dark' ? DARK_PALETTE : LIGHT_PALETTE
@@ -385,7 +442,35 @@ function SolarCanvas({
     camera.position.set(0, 2.33, 15)
     camera.lookAt(0, 0, 0)
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
+    // 即便探测通过，构造渲染器仍可能失败（驱动异常、context 数量耗尽、远程桌面等）。
+    // 捕获后降级到 static 档，而不是让异常冒泡到路由错误边界替换整页。
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        'solar-system: WebGL renderer creation failed, falling back to static view',
+        err
+      )
+      markWebGLUnavailable()
+      onUnsupported()
+      return
+    }
+
+    // 上下文丢失（驱动重置 / 核显独显切换 / 长时间挂后台）无法就地重建全部 GPU 资源，
+    // 因此直接降级到 static 档，保证英雄区不会永久变成空白。
+    const handleContextLost = (event: Event) => {
+      event.preventDefault()
+      // eslint-disable-next-line no-console
+      console.warn(
+        'solar-system: WebGL context lost, falling back to static view'
+      )
+      markWebGLUnavailable()
+      onUnsupported()
+    }
+    renderer.domElement.addEventListener('webglcontextlost', handleContextLost)
+
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(mount.clientWidth, mount.clientHeight)
     renderer.setClearColor(0x000000, 0)
@@ -629,7 +714,16 @@ function SolarCanvas({
       mouse.y = -(e.clientY - rect.top) / rect.height + 0.5
     }
 
-    const onPointerLeave = () => {
+    const onPointerDown = (e: PointerEvent) => {
+      // 触屏 / 触控笔没有 hover：把点按位置作为拾取坐标，
+      // 让射线检测持续命中，点按空白处即可自然清除浮层。
+      if (e.pointerType === 'mouse') return
+      onPointerMove(e)
+    }
+
+    const onPointerLeave = (e: PointerEvent) => {
+      // 触摸抬起后也会派发 pointerleave，若在此清空，点按显示的浮层会立刻被抹掉
+      if (e.pointerType !== 'mouse') return
       pointer.set(0, 0)
       mouse.set(0, 0, 0)
       if (hoveredRef.current) {
@@ -639,9 +733,10 @@ function SolarCanvas({
     }
 
     renderer.domElement.addEventListener('pointermove', onPointerMove)
+    renderer.domElement.addEventListener('pointerdown', onPointerDown)
     renderer.domElement.addEventListener('pointerleave', onPointerLeave)
 
-    // hover 检测（仅桌面鼠标）
+    // 仅用于「悬停暂停该行星公转」的鼠标判定
     const hasHover = window.matchMedia('(hover: hover)').matches
 
     // ── 播放控制 ──
@@ -731,8 +826,8 @@ function SolarCanvas({
         camera.lookAt(0, 0, 0)
       }
 
-      // hover 射线
-      if (hasHover && pointer.lengthSq() > 0.0001) {
+      // hover / 点按射线（触屏走 pointerdown，与鼠标共用同一套拾取）
+      if (pointer.lengthSq() > 0.0001) {
         raycaster.setFromCamera(pointer, camera)
         const hits = raycaster.intersectObjects(planetSprites)
         const name =
@@ -783,12 +878,17 @@ function SolarCanvas({
       io.disconnect()
       window.removeEventListener('resize', onResize)
       renderer.domElement.removeEventListener('pointermove', onPointerMove)
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown)
       renderer.domElement.removeEventListener('pointerleave', onPointerLeave)
+      renderer.domElement.removeEventListener(
+        'webglcontextlost',
+        handleContextLost
+      )
       brandTex?.dispose()
       renderer.dispose()
       mount.removeChild(renderer.domElement)
     }
-  }, [brand, onHover, resolvedTheme])
+  }, [brand, onHover, resolvedTheme, tier, onUnsupported])
 
   return <div ref={mountRef} className={className} />
 }
@@ -796,8 +896,15 @@ function SolarCanvas({
 // ---------- 静态视图（移动端 / reduced-motion） ----------
 function StaticSolar({
   icons,
+  activeName,
+  onHover,
+  onSelect,
 }: {
   icons: Record<string, ComponentType<Record<string, unknown>>>
+  /** 当前高亮的厂商（鼠标悬停 / 键盘聚焦 / 触屏点按固定） */
+  activeName: string | null
+  onHover: (name: string | null) => void
+  onSelect: (name: string) => void
 }) {
   const orbitCounts: Record<0 | 1 | 2, number> = { 0: 0, 1: 0, 2: 0 }
   const positions = PROVIDERS.map((p) => {
@@ -816,19 +923,19 @@ function StaticSolar({
 
   return (
     <div className='relative flex h-full w-full items-center justify-center overflow-hidden'>
-      {/* 恒星核心光晕 */}
-      <div className='pointer-events-none absolute top-1/2 left-1/2 size-[min(62vw,380px)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklch,var(--primary)_60%,transparent)_0%,color-mix(in_oklch,var(--accent)_34%,transparent)_48%,transparent_72%)] blur-[2px]' />
+      {/* 恒星核心光晕（.solar-core-halo 自带 color-mix 降级） */}
+      <div className='solar-core-halo pointer-events-none absolute top-1/2 left-1/2 size-[min(62vw,380px)] -translate-x-1/2 -translate-y-1/2 blur-[2px]' />
 
       {/* 轨道 + 行星（椭圆透视） */}
       <div className='pointer-events-none absolute inset-0 flex items-center justify-center'>
         <div
           className='relative size-[min(92vw,620px)]'
-          style={{ transform: 'scaleY(0.68)' }}
+          style={{ transform: `scaleY(${ORBIT_PERSPECTIVE})` }}
         >
           {orbits.map((o, i) => (
             <div
               key={i}
-              className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[color-mix(in_oklch,var(--accent)_30%,transparent)]'
+              className='solar-orbit-ring absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border'
               style={{
                 width: `${(o.radius / 5.8) * 100}%`,
                 height: `${(o.radius / 5.8) * 100}%`,
@@ -841,6 +948,7 @@ function StaticSolar({
             const r = (p.radius / 5.8) * 50 // 半径%（容器一半对应半径）
             const x = Math.cos(p.angle) * r
             const y = Math.sin(p.angle) * r
+            const isActive = activeName === p.name
             return (
               <div
                 key={p.id}
@@ -853,11 +961,36 @@ function StaticSolar({
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                <div className='grid size-[clamp(20px,3.2vw,30px)] place-items-center rounded-full bg-[color-mix(in_oklch,var(--background)_88%,transparent)] shadow-[0_0_16px_color-mix(in_oklch,var(--accent)_60%,transparent)] ring-1 ring-[color-mix(in_oklch,var(--primary)_25%,transparent)]'>
+                <button
+                  type='button'
+                  // 轨道容器被 scaleY 压扁，图标必须反向抵消，否则品牌 logo 会被压成椭圆
+                  style={{
+                    transform: `scaleY(${1 / ORBIT_PERSPECTIVE}) scale(${isActive ? 1.18 : 1})`,
+                  }}
+                  className={`solar-planet-chip pointer-events-auto grid size-[clamp(20px,3.2vw,30px)] cursor-pointer place-items-center rounded-full ring-1 transition-[filter] focus-visible:outline-none ${
+                    isActive ? 'brightness-125' : ''
+                  }`}
+                  aria-label={p.name}
+                  aria-pressed={isActive}
+                  onPointerEnter={(e) => {
+                    // 触屏没有 hover，且触摸抬起会紧接着派发 pointerleave，
+                    // 因此 hover 通道只对鼠标开放，触摸改为点按固定（见 onClick）
+                    if (e.pointerType === 'mouse') onHover(p.name)
+                  }}
+                  onPointerLeave={(e) => {
+                    if (e.pointerType === 'mouse') onHover(null)
+                  }}
+                  onFocus={() => onHover(p.name)}
+                  onBlur={() => onHover(null)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSelect(p.name)
+                  }}
+                >
                   <span className='text-foreground/90 scale-[0.55]'>
                     <Ico width={40} height={40} />
                   </span>
-                </div>
+                </button>
               </div>
             )
           })}
@@ -876,9 +1009,35 @@ export function SolarSystem({
   label?: string
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
+  // 触屏点按固定的厂商名：触屏没有 hover，必须给用户第二条查看通道
+  const [pinned, setPinned] = useState<string | null>(null)
   // 首帧即按设备能力选定档位：惰性初始化避免「先 full 再纠正」的额外渲染
   // （detectTier 内部对 window 缺失已有兜底）。
-  const [tier] = useState<Tier>(() => detectTier())
+  const [tier, setTier] = useState<Tier>(() => detectTier())
+  // WebGL 渲染失败 / 上下文丢失时降级到 static 档（并保持稳定引用，避免重建 effect）。
+  const handleUnsupported = useCallback(() => setTier('static'), [])
+
+  // 档位必须随环境变化重算：改系统「减少动态效果」、插入/拔出触屏、缩放窗口都会改变结果。
+  // 旧实现只在挂载时算一次，且当 effect 内二次判定变成 static 时会提前 return，
+  // 而父组件仍渲染着 SolarCanvas —— 画布被清掉却没有 StaticSolar 顶上，英雄区就空白了。
+  useEffect(() => {
+    const updateTier = () => {
+      setTier((prev) => {
+        const next = detectTier()
+        return next === prev ? prev : next
+      })
+    }
+    const reducedMq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const coarseMq = window.matchMedia('(pointer: coarse)')
+    reducedMq.addEventListener('change', updateTier)
+    coarseMq.addEventListener('change', updateTier)
+    window.addEventListener('resize', updateTier)
+    return () => {
+      reducedMq.removeEventListener('change', updateTier)
+      coarseMq.removeEventListener('change', updateTier)
+      window.removeEventListener('resize', updateTier)
+    }
+  }, [])
   const iconMap: Record<string, ComponentType<Record<string, unknown>>> = {
     openai: OpenAI,
     claude: Claude,
@@ -894,23 +1053,42 @@ export function SolarSystem({
 
   const handleHover = useCallback((name: string | null) => setHovered(name), [])
 
+  /** 点按同一个厂商再次触发即取消固定 */
+  const handleSelect = useCallback((name: string) => {
+    setPinned((prev) => (prev === name ? null : name))
+  }, [])
+
+  /** 鼠标悬停优先于点按固定 */
+  const activeName = hovered ?? pinned
+
   return (
-    <div className={`relative h-full w-full overflow-hidden ${className}`}>
+    <div
+      className={`relative h-full w-full overflow-hidden ${className}`}
+      // 点按空白处收起固定的厂商浮层（行星按钮内已 stopPropagation）
+      onClick={() => setPinned(null)}
+    >
       {(tier === 'full' || tier === 'lite') && (
         <SolarCanvas
           className='absolute inset-0'
           onHover={handleHover}
           brand={label}
+          tier={tier}
+          onUnsupported={handleUnsupported}
         />
       )}
       {tier === 'static' && (
         <>
-          <StaticSolar icons={iconMap} />
+          <StaticSolar
+            icons={iconMap}
+            activeName={activeName}
+            onHover={handleHover}
+            onSelect={handleSelect}
+          />
 
           {/* 恒星中心字标（静态档无 3D，保留 HTML 层） */}
           {label && (
             <div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center'>
-              <div className='absolute size-[min(58vw,340px)] bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklch,var(--primary)_55%,transparent)_0%,color-mix(in_oklch,var(--accent)_30%,transparent)_45%,transparent_72%)] blur-[2px]' />
+              <div className='solar-glyph-halo absolute size-[min(58vw,340px)] blur-[2px]' />
               {label.trim().length === 1 ? (
                 // 单字符：与 3D 档共用字体与比例的「太阳黑子 H」纯 CSS 复刻
                 <span className='solar-glyph-h' aria-hidden='true'>
@@ -926,11 +1104,11 @@ export function SolarSystem({
         </>
       )}
 
-      {/* hover 名称浮层 */}
-      {hovered && (
+      {/* 厂商名称浮层：鼠标悬停 / 触屏点按 / 键盘聚焦 */}
+      {activeName && (
         <div className='pointer-events-none absolute bottom-[16%] left-1/2 z-30 -translate-x-1/2'>
           <span className='border-border/50 bg-background/70 text-foreground border px-3 py-1 text-xs font-medium shadow-lg backdrop-blur-sm'>
-            {hovered}
+            {activeName}
           </span>
         </div>
       )}
