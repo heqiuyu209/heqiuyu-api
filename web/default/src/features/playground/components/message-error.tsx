@@ -1,6 +1,8 @@
+import { Link } from '@tanstack/react-router'
 import { AlertCircle, AlertTriangle, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
+import { ROLE } from '@/lib/roles'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { MESSAGE_STATUS } from '../constants'
@@ -18,7 +20,9 @@ interface MessageErrorProps {
 export function MessageError({ message, className = '' }: MessageErrorProps) {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.auth.user)
-  const isAdmin = user?.role != null && user.role >= 10
+  // 模型价格设置页 /system-settings/models/ratio 仅超管可访问，
+  // 按钮门槛必须与目标页守卫一致，否则点过去只会看到 403。
+  const canConfigureModelPrice = user?.role === ROLE.SUPER_ADMIN
 
   if (message.status !== MESSAGE_STATUS.ERROR) {
     return null
@@ -34,16 +38,17 @@ export function MessageError({ message, className = '' }: MessageErrorProps) {
         <AlertTitle>{t('Model Price Not Configured')}</AlertTitle>
         <AlertDescription className='space-y-2'>
           <p>{errorContent}</p>
-          {isAdmin && (
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={() =>
-                window.open('/console/setting?tab=ratio', '_blank')
-              }
-            >
-              <Settings className='mr-1 h-3.5 w-3.5' />
-              {t('Go to Settings')}
+          {canConfigureModelPrice && (
+            <Button variant='outline' size='sm' asChild>
+              <Link
+                to='/system-settings/models/$section'
+                params={{ section: 'ratio' }}
+                target='_blank'
+                rel='noopener noreferrer'
+              >
+                <Settings className='mr-1 h-3.5 w-3.5' />
+                {t('Go to Settings')}
+              </Link>
             </Button>
           )}
         </AlertDescription>

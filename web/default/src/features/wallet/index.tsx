@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getSelf } from '@/lib/api'
@@ -20,6 +21,7 @@ interface WalletProps {
 
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
@@ -62,10 +64,12 @@ export function Wallet(props: WalletProps) {
       const timeoutId = window.setTimeout(() => {
         setBillingDialogOpen(true)
       }, 0)
-      window.history.replaceState({}, '', window.location.pathname)
+      // 用路由器清掉查询参数：直接调用 window.history.replaceState 会绕过
+      // 路由器，既覆盖它写入的 history state，也让地址栏与路由状态不一致。
+      void navigate({ to: '/wallet', search: {}, replace: true })
       return () => window.clearTimeout(timeoutId)
     }
-  }, [props.initialShowHistory])
+  }, [props.initialShowHistory, navigate])
 
   // Handle redemption
   const handleRedeem = async () => {

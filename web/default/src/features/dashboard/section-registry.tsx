@@ -30,6 +30,11 @@ export type DashboardSectionId = (typeof DASHBOARD_SECTIONS)[number]['id']
 
 const ADMIN_ONLY_SECTIONS = new Set<string>(['users'])
 
+/** 该分区是否仅管理员可见（侧边栏过滤与路由守卫共用同一份判定） */
+export function isDashboardAdminOnlySection(sectionId: string): boolean {
+  return ADMIN_ONLY_SECTIONS.has(sectionId)
+}
+
 const dashboardRegistry = createSectionRegistry<
   DashboardSectionId,
   Record<string, never>,

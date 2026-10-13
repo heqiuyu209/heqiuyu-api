@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import {
   type ColumnDef,
   type RowSelectionState,
@@ -10,6 +11,8 @@ import {
 } from '@tanstack/react-table'
 import { Loader2, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useAuthStore } from '@/stores/auth-store'
+import { ROLE } from '@/lib/roles'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -101,6 +104,10 @@ export function ChannelTestDialog({
 }: ChannelTestDialogProps) {
   const { t } = useTranslation()
   const { currentRow } = useChannels()
+  const userRole = useAuthStore((s) => s.auth.user?.role)
+  // 模型价格设置页 /system-settings/models/ratio 仅超管可访问，
+  // 按钮门槛必须与目标页守卫一致，否则点过去只会看到 403。
+  const canConfigureModelPrice = userRole === ROLE.SUPER_ADMIN
   const [endpointType, setEndpointType] = useState('auto')
   const [isStreamTest, setIsStreamTest] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -346,19 +353,20 @@ export function ChannelTestDialog({
                   {result.error}
                 </span>
               )}
-              {result.errorCode === 'model_price_error' && (
-                <Button
-                  variant='outline'
-                  size='sm'
-                  className='w-fit'
-                  onClick={() =>
-                    window.open('/console/setting?tab=ratio', '_blank')
-                  }
-                >
-                  <Settings className='mr-1 h-3 w-3' />
-                  {t('Go to Settings')}
-                </Button>
-              )}
+              {result.errorCode === 'model_price_error' &&
+                canConfigureModelPrice && (
+                  <Button variant='outline' size='sm' className='w-fit' asChild>
+                    <Link
+                      to='/system-settings/models/$section'
+                      params={{ section: 'ratio' }}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                    >
+                      <Settings className='mr-1 h-3 w-3' />
+                      {t('Go to Settings')}
+                    </Link>
+                  </Button>
+                )}
             </div>
           )
         },
@@ -391,6 +399,7 @@ export function ChannelTestDialog({
       },
     ],
     [
+      canConfigureModelPrice,
       defaultTestModel,
       isBatchTesting,
       t,

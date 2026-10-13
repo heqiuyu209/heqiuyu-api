@@ -2,6 +2,10 @@ import { useNavigate } from '@tanstack/react-router'
 import i18n from 'i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { getSelf } from '@/lib/api'
+import {
+  normalizeInternalRedirect,
+  resolveInternalRedirect,
+} from '@/lib/redirect'
 import type { User } from '@/features/users/types'
 import { saveUserId } from '../lib/storage'
 
@@ -51,15 +55,21 @@ export function useAuthRedirect() {
     }
 
     // Navigate to target page
-    const targetPath = redirectTo || '/dashboard'
+    const targetPath = resolveInternalRedirect(redirectTo)
     navigate({ to: targetPath, replace: true })
   }
 
   /**
-   * Redirect to 2FA page
+   * Redirect to 2FA page, keeping the original destination so the user
+   * still lands where they wanted after the code is verified.
    */
-  const redirectTo2FA = () => {
-    navigate({ to: '/otp', replace: true })
+  const redirectTo2FA = (redirectTo?: string) => {
+    const target = normalizeInternalRedirect(redirectTo)
+    navigate({
+      to: '/otp',
+      search: target ? { redirect: target } : {},
+      replace: true,
+    })
   }
 
   /**
@@ -67,6 +77,13 @@ export function useAuthRedirect() {
    */
   const redirectToLogin = () => {
     navigate({ to: '/sign-in', replace: true })
+  }
+
+  /**
+   * Redirect to the page the user originally asked for (or dashboard)
+   */
+  const redirectAfterLogin = (redirectTo?: string) => {
+    navigate({ to: resolveInternalRedirect(redirectTo), replace: true })
   }
 
   /**
@@ -80,6 +97,7 @@ export function useAuthRedirect() {
     handleLoginSuccess,
     redirectTo2FA,
     redirectToLogin,
+    redirectAfterLogin,
     redirectToRegister,
   }
 }

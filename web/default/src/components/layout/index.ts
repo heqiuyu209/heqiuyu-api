@@ -18,7 +18,7 @@ export { NavGroup } from './components/nav-group'
 export { SectionPageLayout } from './components/section-page-layout'
 export { WorkspaceSwitcher } from './components/workspace-switcher'
 export { TopNav } from './components/top-nav'
-export { MobileDrawer } from './components/mobile-drawer'
+// MobileDrawer 已废弃：从未被任何页面引用，移动端导航由 PublicHeader 的内联 overlay 承担
 
 // 上下文
 export { WorkspaceProvider, useWorkspace } from './context/workspace-context'
@@ -31,7 +31,7 @@ export {
 export { defaultTopNavLinks } from './config/top-nav.config'
 
 // 常量
-export { MOBILE_DRAWER_ANIMATION, MOBILE_DRAWER_CONFIG } from './constants'
+// MOBILE_DRAWER_* 已随 MobileDrawer 一起废弃（清理脚本 cleanup-dead-code.mjs 会删除该组件与 constants.ts）
 
 // 工具函数 - 工作区注册表
 export {

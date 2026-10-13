@@ -203,5 +203,3 @@ export function sanitizeHtml(html: string): string {
   container.appendChild(root)
   return container.innerHTML
 }
-
-export default sanitizeHtml

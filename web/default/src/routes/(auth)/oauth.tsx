@@ -4,6 +4,7 @@ import i18next from 'i18next'
 import { toast } from 'sonner'
 import { useAuthStore, type AuthUser } from '@/stores/auth-store'
 import { getSelf } from '@/lib/api'
+import { resolveInternalRedirect } from '@/lib/redirect'
 import { wechatLoginByCode } from '@/features/auth/api'
 import { isTwoFactorRequired } from '@/features/auth/lib/two-factor'
 
@@ -18,21 +19,25 @@ function OAuthComponent() {
 
   useEffect(() => {
     ;(async () => {
+      const redirectTo = resolveInternalRedirect(search?.redirect)
       try {
         if (search?.provider === 'wechat' && search.code) {
           const wechatRes = await wechatLoginByCode(search.code)
           // 2FA challenge: no session was established, continue on the OTP page
           if (isTwoFactorRequired(wechatRes?.data)) {
             toast.info(i18next.t('Please enter the authentication code.'))
-            navigate({ to: '/otp', replace: true })
+            navigate({
+              to: '/otp',
+              search: { redirect: redirectTo },
+              replace: true,
+            })
             return
           }
         }
         const res = await getSelf()
         if (res?.success) {
           useAuthStore.getState().auth.setUser(res.data as AuthUser)
-          const target = search?.redirect || '/dashboard'
-          navigate({ to: target, replace: true })
+          navigate({ to: redirectTo, replace: true })
           return
         }
       } catch {

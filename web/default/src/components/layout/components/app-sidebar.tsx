@@ -32,7 +32,12 @@ export function AppSidebar() {
   const sidebarData = useSidebarData()
 
   // Get navigation group configuration corresponding to current path from workspace registry
-  const allNavGroups = getNavGroupsForPath(pathname, t) || sidebarData.navGroups
+  // 用 useMemo 固定引用：getNavGroupsForPath 每次都返回新数组，
+  // 否则下游的 useSidebarConfig / currentNavGroups 记忆化全部失效
+  const allNavGroups = useMemo(
+    () => getNavGroupsForPath(pathname, t) || sidebarData.navGroups,
+    [pathname, t, sidebarData.navGroups]
+  )
 
   // Filter sidebar navigation items based on backend configuration
   const configFilteredNavGroups = useSidebarConfig(allNavGroups)

@@ -23,11 +23,12 @@ function ChatRouteComponent() {
   const { t } = useTranslation()
   const { chatId } = Route.useParams()
   const { chatPresets, serverAddress } = useChatPresets()
-  const preset = useMemo(() => {
-    const index = Number(chatId)
-    if (!Number.isInteger(index)) return undefined
-    return chatPresets[index]
-  }, [chatId, chatPresets])
+  // 按预设 id 查找：id 由配置数组下标生成，一旦配置里有非法项被过滤，
+  // 结果数组的下标就会与 id 错位，因此不能用 chatPresets[Number(chatId)]
+  const preset = useMemo(
+    () => chatPresets.find((item) => item.id === chatId),
+    [chatId, chatPresets]
+  )
 
   const isWebLink = preset?.type === 'web'
 

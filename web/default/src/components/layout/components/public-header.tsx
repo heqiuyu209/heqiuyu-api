@@ -19,7 +19,6 @@ import { HeaderLogo } from './header-logo'
 
 export interface PublicHeaderProps {
   navLinks?: TopNavLink[]
-  mobileLinks?: TopNavLink[]
   navContent?: React.ReactNode
   showThemeSwitch?: boolean
   showLanguageSwitcher?: boolean
@@ -260,21 +259,42 @@ export function PublicHeader(props: PublicHeaderProps) {
           >
             {links.map((link, i) => {
               const isActive = pathname === link.href
+              const linkClassName = cn(
+                'flex items-center gap-3 py-3 text-base font-medium tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                mobileOpen
+                  ? 'translate-y-0 opacity-100'
+                  : 'translate-y-4 opacity-0',
+                isActive ? 'text-foreground' : 'text-muted-foreground'
+              )
+              const linkStyle = {
+                transitionDelay: mobileOpen ? `${100 + i * 50}ms` : '0ms',
+              }
+
+              // 与桌面端保持一致：外链必须用 <a>，否则绝对地址会被
+              // 当成站内路径解析而落到 404
+              if (link.external) {
+                return (
+                  <a
+                    key={i}
+                    href={link.href}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    onClick={() => setMobileOpen(false)}
+                    className={linkClassName}
+                    style={linkStyle}
+                  >
+                    {t(link.title)}
+                  </a>
+                )
+              }
+
               return (
                 <Link
                   key={i}
                   to={link.href}
                   onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    'flex items-center gap-3 py-3 text-base font-medium tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                    mobileOpen
-                      ? 'translate-y-0 opacity-100'
-                      : 'translate-y-4 opacity-0',
-                    isActive ? 'text-foreground' : 'text-muted-foreground'
-                  )}
-                  style={{
-                    transitionDelay: mobileOpen ? `${100 + i * 50}ms` : '0ms',
-                  }}
+                  className={linkClassName}
+                  style={linkStyle}
                 >
                   {t(link.title)}
                 </Link>

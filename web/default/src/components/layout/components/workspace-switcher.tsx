@@ -87,24 +87,29 @@ export function WorkspaceSwitcher({
     // Detect which workspace should be active from workspace registry
     const detectedWorkspace = getWorkspaceByPath(pathname)
 
-    if (detectedWorkspace.id === WORKSPACE_IDS.SYSTEM_SETTINGS) {
-      // Currently in system settings route, should activate System Settings workspace
-      const systemSettingsWorkspace = availableWorkspaces.find(
-        (w) => w.id === WORKSPACE_IDS.SYSTEM_SETTINGS
-      )
-      if (systemSettingsWorkspace) {
-        setActiveWorkspace(systemSettingsWorkspace)
-      }
-    } else {
-      // Currently in main workspace route, should activate main workspace
-      const mainWorkspace =
-        availableWorkspaces.find((w) => w.id === WORKSPACE_IDS.DEFAULT) ||
-        availableWorkspaces[0]
-      if (mainWorkspace) {
-        setActiveWorkspace(mainWorkspace)
-      }
+    const target =
+      detectedWorkspace.id === WORKSPACE_IDS.SYSTEM_SETTINGS
+        ? availableWorkspaces.find(
+            (w) => w.id === WORKSPACE_IDS.SYSTEM_SETTINGS
+          )
+        : availableWorkspaces.find((w) => w.id === WORKSPACE_IDS.DEFAULT) ||
+          availableWorkspaces[0]
+
+    if (!target) return
+
+    // 内容没变就不要写 context：否则父组件每次重渲染都会触发一次
+    // activeWorkspace 更新和下游重渲染
+    if (
+      activeWorkspace &&
+      activeWorkspace.id === target.id &&
+      activeWorkspace.name === target.name &&
+      activeWorkspace.plan === target.plan
+    ) {
+      return
     }
-  }, [pathname, availableWorkspaces, setActiveWorkspace])
+
+    setActiveWorkspace(target)
+  }, [activeWorkspace, pathname, availableWorkspaces, setActiveWorkspace])
 
   const handleWorkspaceChange = (workspace: Workspace) => {
     // Only navigate, let useEffect synchronize workspace state based on new pathname

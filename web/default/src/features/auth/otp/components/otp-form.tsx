@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useSearch } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -48,7 +49,9 @@ export function OtpForm({ className, ...props }: OtpFormProps) {
   const [useBackupCode, setUseBackupCode] = useState(false)
 
   const { auth } = useAuthStore()
-  const { redirectToLogin } = useAuthRedirect()
+  const { redirectToLogin, redirectAfterLogin } = useAuthRedirect()
+  // 登录流程带过来的原目标页，校验通过后要回到这里
+  const { redirect } = useSearch({ from: '/(auth)/otp' })
 
   const form = useForm<z.infer<typeof otpFormSchema>>({
     resolver: zodResolver(otpFormSchema),
@@ -97,7 +100,8 @@ export function OtpForm({ className, ...props }: OtpFormProps) {
       }
 
       toast.success(t('Signed in'))
-      redirectToLogin() // This will redirect to dashboard via the redirect logic
+      // 回到用户原本要去的页面（缺失/非法时回退到 dashboard）
+      redirectAfterLogin(redirect)
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('2FA verification error:', error)

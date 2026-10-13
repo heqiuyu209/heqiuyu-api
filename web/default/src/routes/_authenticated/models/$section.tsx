@@ -19,6 +19,8 @@ const modelsSearchSchema = z.object({
   dPageSize: z.number().optional().catch(10),
   dFilter: z.string().optional().catch(''),
   dStatus: z.array(z.string()).optional().catch([]),
+  // 深链到某个 io.net 部署：进入部署分区后直接打开它的详情弹窗
+  deploymentId: z.string().optional(),
 })
 
 export const Route = createFileRoute('/_authenticated/models/$section')({

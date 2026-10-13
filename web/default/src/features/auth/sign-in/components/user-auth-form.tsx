@@ -138,7 +138,7 @@ export function UserAuthForm({
 
       if (res.success) {
         if (isTwoFactorRequired(res.data)) {
-          redirectTo2FA()
+          redirectTo2FA(redirectTo)
           return
         }
 
@@ -182,7 +182,7 @@ export function UserAuthForm({
         if (isTwoFactorRequired(res.data)) {
           toast.info(twoFactorRequiredMessage)
           handleWeChatDialogChange(false)
-          redirectTo2FA()
+          redirectTo2FA(redirectTo)
           return
         }
 
@@ -247,7 +247,7 @@ export function UserAuthForm({
 
       if (isTwoFactorRequired(finish.data)) {
         toast.info(twoFactorRequiredMessage)
-        redirectTo2FA()
+        redirectTo2FA(redirectTo)
         return
       }
 

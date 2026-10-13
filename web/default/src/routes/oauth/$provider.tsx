@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { z } from 'zod'
 import type { AxiosRequestConfig } from 'axios'
 import {
   createFileRoute,
@@ -10,6 +11,7 @@ import i18next from 'i18next'
 import { toast } from 'sonner'
 import { useAuthStore, type AuthUser } from '@/stores/auth-store'
 import { api, getSelf } from '@/lib/api'
+import { resolveInternalRedirect } from '@/lib/redirect'
 import { OAuthCallbackScreen } from '@/features/auth/components/oauth-callback-screen'
 import { OAUTH_BIND_STORAGE_KEY } from '@/features/auth/constants'
 import { isTwoFactorRequired } from '@/features/auth/lib/two-factor'
@@ -32,6 +34,9 @@ function OAuthCallback() {
     if (typeof window === 'undefined') return 'login'
     return window.opener ? 'bind' : 'login'
   })
+  // 回调里的 code 只能兑换一次：用 ref 防止 effect 重跑（StrictMode、
+  // mode/search 引用变化）时重复调用后端接口。
+  const startedRef = useRef(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -40,24 +45,18 @@ function OAuthCallback() {
   }, [])
 
   useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
     ;(async () => {
+      /**
+       * 唯一的跳转入口：只允许站内路径（见 @/lib/redirect），
+       * 并且完全交给路由器，不再用 window.location 兜底。
+       */
       const safeNavigate = (target: string) => {
-        navigate({ to: target as never, replace: true })
-        if (typeof window !== 'undefined') {
-          setTimeout(() => {
-            const normalizedTarget = target.startsWith('/')
-              ? target
-              : `/${target}`
-            const currentPath =
-              window.location.pathname + window.location.search
-            if (
-              currentPath !== normalizedTarget &&
-              currentPath !== `${normalizedTarget}/`
-            ) {
-              window.location.replace(target)
-            }
-          }, 100)
-        }
+        navigate({
+          to: resolveInternalRedirect(target) as never,
+          replace: true,
+        })
       }
 
       if (!search?.code) {
@@ -94,7 +93,9 @@ function OAuthCallback() {
         window.close()
         setTimeout(() => {
           if (!window.closed) {
-            window.location.replace('/_authenticated/profile/')
+            // 绑定窗口关不掉时留在站内个人中心（`_authenticated` 是
+            // pathless 布局路由，不能出现在 URL 里）
+            safeNavigate('/profile')
           }
         }, 200)
       }
@@ -162,7 +163,7 @@ function OAuthCallback() {
               // Close the callback window if we opened a new tab for binding
               closeBindingWindow()
             } else {
-              safeNavigate('/_authenticated/profile/')
+              safeNavigate('/profile')
             }
             return
           }
@@ -171,7 +172,12 @@ function OAuthCallback() {
           // user over to the same OTP step the password login uses.
           if (isTwoFactorRequired(loginUser)) {
             toast.info(i18next.t('Please enter the authentication code.'))
-            safeNavigate('/otp')
+            // 把原目标页一起带到 /otp，校验通过后才能回到这里
+            navigate({
+              to: '/otp',
+              search: { redirect: resolveInternalRedirect(search?.redirect) },
+              replace: true,
+            })
             return
           }
           // Otherwise it's a login, use payload user if available
@@ -234,5 +240,12 @@ function OAuthCallback() {
 }
 
 export const Route = createFileRoute('/oauth/$provider')({
+  // redirect 来自 URL，属于不可信输入；这里先做形状校验，
+  // 真正的站内路径校验在 resolveInternalRedirect 里完成。
+  validateSearch: z.object({
+    code: z.string().optional(),
+    state: z.string().optional(),
+    redirect: z.string().optional(),
+  }),
   component: OAuthCallback,
 })

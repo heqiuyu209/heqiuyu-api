@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
   AlertTriangle,
@@ -650,21 +651,23 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
               copyable={false}
             />
             {isIonet && (
+              /* 旧地址 /console/deployment 在新前端不存在，会落到 404；
+                 io.net 部署列表现在位于 模型 → 部署 */
               <TooltipProvider delayDuration={100}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span
+                    <Link
+                      to='/models/$section'
+                      params={{ section: 'deployments' }}
+                      search={{ deploymentId }}
+                      target='_blank'
+                      rel='noopener noreferrer'
                       className='flex cursor-pointer items-center gap-1.5 text-xs font-medium'
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (!deploymentId) return
-                        const targetUrl = `/console/deployment?deployment_id=${deploymentId}`
-                        window.open(targetUrl, '_blank', 'noopener')
-                      }}
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <span className='text-muted-foreground/30'>·</span>
                       <span className={cn(textColorMap.purple)}>IO.NET</span>
-                    </span>
+                    </Link>
                   </TooltipTrigger>
                   <TooltipContent side='top'>
                     <div className='max-w-xs space-y-1'>

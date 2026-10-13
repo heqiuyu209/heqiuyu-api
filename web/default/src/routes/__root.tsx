@@ -88,11 +88,15 @@ export const Route = createRootRouteWithContext<{
         return null
       })
 
-      if (status?.success && status.data && !status.data.status) {
-        throw redirect({ to: '/setup' })
+      // 只有拿到确定的回答才写缓存：请求失败（后端重启/网络抖动）时
+      // 若也标记「已检查」，未初始化的实例将永远不会再自动跳到 /setup。
+      if (status?.success && status.data) {
+        if (!status.data.status) {
+          throw redirect({ to: '/setup' })
+        }
+        setupStatusChecked = true
+        setSetupStatusCache(true)
       }
-      setupStatusChecked = true
-      setSetupStatusCache(true)
     }
     // 用户认证状态完全依赖 localStorage 缓存
     // 如果用户有有效 session 但 localStorage 被清空，会被重定向到登录页重新登录

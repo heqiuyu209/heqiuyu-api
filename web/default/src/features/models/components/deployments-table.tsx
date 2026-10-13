@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import {
@@ -55,6 +55,10 @@ export function DeploymentsTable() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const isMobile = useIsMobile()
+  const navigate = route.useNavigate()
+  const searchParams = route.useSearch()
+  const deepLinkDeploymentId = searchParams.deploymentId
+  const handledDeepLinkRef = useRef<string | null>(null)
 
   // URL state (use dedicated keys so it won't collide with metadata table)
   const {
@@ -115,6 +119,22 @@ export function DeploymentsTable() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Deployment | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // 深链：/models/deployments?deploymentId=xxx 直接打开该部署的详情弹窗
+  useEffect(() => {
+    if (!deepLinkDeploymentId) return
+    if (handledDeepLinkRef.current === deepLinkDeploymentId) return
+    handledDeepLinkRef.current = deepLinkDeploymentId
+
+    setDetailsDeploymentId(deepLinkDeploymentId)
+    setDetailsOpen(true)
+
+    // 打开后把参数从地址栏清掉，避免刷新/后退时反复弹窗
+    void navigate({
+      search: (prev) => ({ ...prev, deploymentId: undefined }),
+      replace: true,
+    })
+  }, [deepLinkDeploymentId, navigate])
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: deploymentsQueryKeys.list({
