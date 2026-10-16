@@ -29,6 +29,7 @@ import type {
 export async function getModels(
   params: GetModelsParams = {}
 ): Promise<GetModelsResponse> {
+  // 路径与后端注册的 /api/models/ 完全一致，避免多一次 307 重定向
   const res = await api.get('/api/models/', { params })
   return res.data
 }
@@ -241,7 +242,7 @@ export async function createPrefillGroup(data: {
   items: string | string[]
   description?: string
 }): Promise<{ success: boolean; message?: string }> {
-  const res = await api.post('/api/prefill_group', data)
+  const res = await api.post('/api/prefill_group/', data)
   return res.data
 }
 
@@ -255,7 +256,7 @@ export async function updatePrefillGroup(data: {
   items?: string | string[]
   description?: string
 }): Promise<{ success: boolean; message?: string }> {
-  const res = await api.put('/api/prefill_group', data)
+  const res = await api.put('/api/prefill_group/', data)
   return res.data
 }
 

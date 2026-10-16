@@ -68,9 +68,13 @@ export async function updateUser(
 
 /**
  * Delete a single user (hard delete)
+ *
+ * 注意：URL 不能带尾斜杠。后端注册的是 DELETE /api/user/:id，带尾斜杠会先收到
+ * Gin 的 307 重定向才落到真实路由；一旦部署在反向代理/跨源场景下，重定向响应
+ * 不带 CORS 头就会被浏览器拦掉，表现为「删除用户失败」。
  */
 export async function deleteUser(id: number): Promise<ApiResponse> {
-  const res = await api.delete(`/api/user/${id}/`)
+  const res = await api.delete(`/api/user/${id}`)
   return res.data
 }
 

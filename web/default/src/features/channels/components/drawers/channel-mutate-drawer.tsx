@@ -18,7 +18,9 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import { ROLE } from '@/lib/roles'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useHiddenClickUnlock } from '@/hooks/use-hidden-click-unlock'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -181,6 +183,13 @@ export function ChannelMutateDrawer({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { setOpen } = useChannels()
+  // 与后端一致：
+  //   - POST /api/channel/:id/key 需要 RootAuth（+ 二次验证）→ 只有超管能查看密钥；
+  //   - 修改 base_url / 参数覆盖 / 请求覆盖 / Setting(代理) 需要 root
+  //     （controller/channel.go: channelDestinationChanged + requireChannelDestinationPrivilege）。
+  // 非超管管理员若改这些字段，整个保存会被后端拒绝，因此这里提前给出说明。
+  const isRootActor =
+    useAuthStore((s) => s.auth.user?.role) === ROLE.SUPER_ADMIN
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [customModel, setCustomModel] = useState('')
   const [isFetchingModels, setIsFetchingModels] = useState(false)
@@ -937,6 +946,16 @@ export function ChannelMutateDrawer({
               onSubmit={form.handleSubmit(onSubmit)}
               className='flex-1 space-y-6 overflow-y-auto px-4'
             >
+              {/* 非超管提示：出站目标类字段与密钥查看都是 root 专属，避免"填完保存被拒" */}
+              {!isRootActor && (
+                <Alert>
+                  <AlertDescription className='text-xs'>
+                    {t(
+                      'Outbound destination settings (Base URL, parameter/header overrides, proxy) and revealing the saved key require super admin privileges. Other fields can be edited normally.'
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
               {/* Basic Info Section */}
               <div className='space-y-4'>
                 <h3 className='text-sm font-semibold'>
@@ -2001,8 +2020,16 @@ export function ChannelMutateDrawer({
                                   size='sm'
                                   onClick={handleRevealKey}
                                   disabled={
+                                    !isRootActor ||
                                     isChannelKeyLoading ||
                                     verificationState.loading
+                                  }
+                                  title={
+                                    isRootActor
+                                      ? undefined
+                                      : t(
+                                          'Revealing the saved key requires super admin privileges'
+                                        )
                                   }
                                 >
                                   {isChannelKeyLoading ||

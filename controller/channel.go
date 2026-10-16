@@ -435,6 +435,13 @@ func validateTwoFactorAuth(twoFA *model.TwoFA, code string) bool {
 
 // validateChannel 通用的渠道校验函数
 func validateChannel(channel *model.Channel, isAdd bool) error {
+	// 先判空：此前 nil 会直接进入 channel.ValidateSettings() 触发空指针 panic。
+	// 畸形请求体（缺少 channel 对象）应当被明确拒绝，而不是 500/空响应
+	//（按钮可达性验证报告 F3）。
+	if channel == nil {
+		return fmt.Errorf("channel cannot be empty")
+	}
+
 	// 校验 channel settings
 	if err := channel.ValidateSettings(); err != nil {
 		return fmt.Errorf("渠道额外设置[channel setting] 格式错误：%s", err.Error())
@@ -581,6 +588,17 @@ func AddChannel(c *gin.Context) {
 	err := c.ShouldBindJSON(&addChannelRequest)
 	if err != nil {
 		common.ApiError(c, err)
+		return
+	}
+
+	// 畸形请求体（缺少 channel 对象）必须在进入业务逻辑前明确拒绝。
+	// 此前会走到 validateChannel(nil, true) → 空指针 panic，客户端得到不稳定的
+	// 500 / 空响应（按钮可达性验证报告 F3）。
+	if addChannelRequest.Channel == nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "请求体格式错误：缺少 channel 对象",
+		})
 		return
 	}
 

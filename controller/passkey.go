@@ -351,6 +351,18 @@ func AdminResetPasskey(c *gin.Context) {
 		return
 	}
 
+	// 权限门禁：与 AdminDisable2FA 保持一致——重置 Passkey 等于剥夺目标的免密登录凭据，
+	// 不允许操作同级或更高级别的账户（此前这里完全没有校验，任何管理员都能重置
+	// 包括 root 在内任何人的 Passkey）。
+	myRole := c.GetInt("role")
+	if myRole <= user.Role && myRole != common.RoleRootUser {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "无权操作同级或更高级用户的 Passkey",
+		})
+		return
+	}
+
 	if _, err := model.GetPasskeyByUserID(user.Id); err != nil {
 		if errors.Is(err, model.ErrPasskeyNotFound) {
 			c.JSON(http.StatusOK, gin.H{

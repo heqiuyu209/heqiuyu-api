@@ -105,12 +105,13 @@ export async function sendEmailVerification(
 }
 
 // Bind email to OAuth account
+//
+// 后端只注册了 POST /api/oauth/email/bind，body 为 {email, code}；
+// 此前用 GET + params 调用会直接 404（按钮可达性验证报告 F1）。
 export async function bindEmail(
   email: string,
   code: string
 ): Promise<ApiResponse> {
-  const res = await api.get('/api/oauth/email/bind', {
-    params: { email, code },
-  })
+  const res = await api.post('/api/oauth/email/bind', { email, code })
   return res.data
 }

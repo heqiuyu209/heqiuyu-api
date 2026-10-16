@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -43,6 +44,7 @@ interface DataTableRowActionsProps {
 export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { t } = useTranslation()
   const user = row.original
+  const actorRole = useAuthStore((s) => s.auth.user?.role) ?? 0
   const { setOpen, setCurrentRow, triggerRefresh } = useUsers()
   const [resetPasskeyOpen, setResetPasskeyOpen] = useState(false)
   const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
@@ -109,6 +111,12 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const isDisabled = user.status === USER_STATUS.DISABLED
   const isAdmin = user.role >= USER_ROLE.ADMIN
   const isRoot = user.role === USER_ROLE.ROOT
+  // 与后端权限保持一致，避免「按钮可点但必然被拒」：
+  //   ManageUser / AdminDisable2FA：超管可操作任意用户，其他角色必须严格高于目标角色；
+  //   DeleteUser：没有超管豁免，必须严格高于目标角色（root 也不可删）。
+  const isRootActor = actorRole === USER_ROLE.ROOT
+  const canManage = isRootActor || actorRole > user.role
+  const canDelete = actorRole > user.role
 
   if (isUserDeleted(user)) {
     return null
@@ -137,7 +145,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           <DropdownMenuSeparator />
 
           {isDisabled ? (
-            <DropdownMenuItem onClick={() => handleManage('enable')}>
+            <DropdownMenuItem
+              onClick={() => handleManage('enable')}
+              disabled={!canManage}
+            >
               {t('Enable')}
               <DropdownMenuShortcut>
                 <Power size={16} />
@@ -146,7 +157,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           ) : (
             <DropdownMenuItem
               onClick={() => handleManage('disable')}
-              disabled={isRoot}
+              disabled={!canManage || isRoot}
             >
               {t('Disable')}
               <DropdownMenuShortcut>
@@ -156,7 +167,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           )}
 
           {isAdmin && !isRoot && (
-            <DropdownMenuItem onClick={() => handleManage('demote')}>
+            <DropdownMenuItem
+              onClick={() => handleManage('demote')}
+              disabled={!canManage}
+            >
               {t('Demote')}
               <DropdownMenuShortcut>
                 <ArrowDown size={16} />
@@ -165,7 +179,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           )}
 
           {!isAdmin && (
-            <DropdownMenuItem onClick={() => handleManage('promote')}>
+            <DropdownMenuItem
+              onClick={() => handleManage('promote')}
+              disabled={!canManage}
+            >
               {t('Promote')}
               <DropdownMenuShortcut>
                 <ArrowUp size={16} />
@@ -178,6 +195,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               event.preventDefault()
               setBindingDialogOpen(true)
             }}
+            disabled={!canManage}
           >
             {t('Manage Bindings')}
             <DropdownMenuShortcut>
@@ -192,7 +210,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               event.preventDefault()
               setResetPasskeyOpen(true)
             }}
-            disabled={isRoot}
+            disabled={!canManage || isRoot}
           >
             {t('Reset Passkey')}
             <DropdownMenuShortcut>
@@ -205,7 +223,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               event.preventDefault()
               setResetTwoFAOpen(true)
             }}
-            disabled={isRoot}
+            disabled={!canManage || isRoot}
           >
             {t('Reset 2FA')}
             <DropdownMenuShortcut>
@@ -218,7 +236,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           <DropdownMenuItem
             onClick={handleDelete}
             className='text-destructive focus:text-destructive'
-            disabled={isRoot}
+            disabled={!canDelete || isRoot}
           >
             {t('Delete')}
             <DropdownMenuShortcut>

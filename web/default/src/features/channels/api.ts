@@ -78,7 +78,8 @@ export type CodexCredentialRefreshResponse = {
 export async function getChannels(
   params: GetChannelsParams = {}
 ): Promise<GetChannelsResponse> {
-  const res = await api.get('/api/channel', { params })
+  // 路径必须与后端注册的 /api/channel/ 完全一致，否则会先吃一个 307 重定向
+  const res = await api.get('/api/channel/', { params })
   return res.data
 }
 
@@ -107,7 +108,8 @@ export async function getChannel(id: number): Promise<GetChannelResponse> {
 export async function createChannel(
   data: AddChannelRequest
 ): Promise<{ success: boolean; message?: string }> {
-  const res = await api.post('/api/channel', data)
+  // 与后端 POST /api/channel/ 对齐（此前缺少尾斜杠，每次创建都要先走 307）
+  const res = await api.post('/api/channel/', data)
   return res.data
 }
 
@@ -543,6 +545,6 @@ export async function getPrefillGroups(
   message?: string
   data?: Array<{ id: number; name: string; items: string | string[] }>
 }> {
-  const res = await api.get('/api/prefill_group', { params: { type } })
+  const res = await api.get('/api/prefill_group/', { params: { type } })
   return res.data
 }

@@ -44,6 +44,12 @@ type resolvedIdentity struct {
 }
 
 // denyJSON 输出鉴权失败响应并中止请求。
+//
+// 状态码约定（前端依赖这套约定决定"是否登出"）：
+//   - 401：身份/凭据已失效（未登录、会话被改密作废、账号被封禁、令牌无效）
+//     → 前端会清空登录态并跳转登录页；
+//   - 403：已认证但权限不足（角色不够）；
+//   - 200 + success:false：仅用于业务层错误，不要用于鉴权失败。
 func denyJSON(c *gin.Context, httpStatus int, messageKey string) {
 	c.JSON(httpStatus, gin.H{
 		"success": false,
@@ -97,7 +103,9 @@ func authorize(c *gin.Context, minRole int) (*resolvedIdentity, bool) {
 		if !sessionAuthVersionValid(c, session, userId) {
 			session.Clear()
 			_ = session.Save()
-			denyJSON(c, http.StatusOK, i18n.MsgAuthNotLoggedIn)
+			// 401（而非 200+success:false）：否则前端不会清登录态，用户会卡在
+			// "每个接口都失败但还显示已登录"的状态里。
+			denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthNotLoggedIn)
 			return nil, false
 		}
 	} else {
@@ -113,12 +121,13 @@ func authorize(c *gin.Context, minRole int) (*resolvedIdentity, bool) {
 				common.SysLog("ValidateAccessToken database error: " + authErr.Error())
 				denyJSON(c, http.StatusInternalServerError, i18n.MsgDatabaseError)
 			} else {
-				denyJSON(c, http.StatusOK, i18n.MsgAuthAccessTokenInvalid)
+				// 令牌无效：凭据问题，仍属 401（前端据此清登录态）
+				denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthAccessTokenInvalid)
 			}
 			return nil, false
 		}
 		if user == nil || user.Username == "" || user.Id == 0 {
-			denyJSON(c, http.StatusOK, i18n.MsgAuthAccessTokenInvalid)
+			denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthAccessTokenInvalid)
 			return nil, false
 		}
 		userId = user.Id
@@ -154,15 +163,17 @@ func authorize(c *gin.Context, minRole int) (*resolvedIdentity, bool) {
 		return nil, false
 	}
 	if status == common.UserStatusDisabled {
-		denyJSON(c, http.StatusOK, i18n.MsgAuthUserBanned)
+		// 封禁账号的会话不再有效：用 401 让前端登出，而不是留在"已登录但处处失败"的状态
+		denyJSON(c, http.StatusUnauthorized, i18n.MsgAuthUserBanned)
 		return nil, false
 	}
 	if role < minRole {
-		denyJSON(c, http.StatusOK, i18n.MsgAuthInsufficientPrivilege)
+		// 已认证但权限不足：403
+		denyJSON(c, http.StatusForbidden, i18n.MsgAuthInsufficientPrivilege)
 		return nil, false
 	}
 	if !validUserInfo(username, role) {
-		denyJSON(c, http.StatusOK, i18n.MsgAuthUserInfoInvalid)
+		denyJSON(c, http.StatusForbidden, i18n.MsgAuthUserInfoInvalid)
 		return nil, false
 	}
 

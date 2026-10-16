@@ -52,6 +52,13 @@ type User struct {
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	LastLoginAt      int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	// AuthVersion 用于「改密即让旧会话失效」（审计报告 R1）：改密时自增，
+	// 会话 cookie 里记录签发时的版本号，比对不一致即失效。
+	// 注意：这里必须是真实列。缺少本字段时 AutoMigrate 不会建出 auth_version，
+	// 而 Edit/UpdateProfile/ResetUserPassword 都会写 `auth_version + 1`，
+	// 于是整个更新语句以 "no such column: auth_version" 失败——表现就是
+	// 管理员改别人密码、用户自己改密码全部失败。
+	AuthVersion int `json:"auth_version" gorm:"type:int;default:0;column:auth_version"`
 }
 
 func (user *User) ToBaseUser() *UserBase {

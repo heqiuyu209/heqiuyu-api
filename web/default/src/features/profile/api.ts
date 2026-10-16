@@ -80,20 +80,25 @@ export async function sendEmailVerification(
 
 /**
  * Bind email account
+ *
+ * 后端只注册了 POST /api/oauth/email/bind，且从 JSON body 取 {email, code}；
+ * 此前用 GET + query 调用会直接 404（按钮可达性验证报告 F1）。
  */
 export async function bindEmail(
   email: string,
   code: string
 ): Promise<ApiResponse> {
-  const res = await api.get(`/api/oauth/email/bind?email=${email}&code=${code}`)
+  const res = await api.post('/api/oauth/email/bind', { email, code })
   return res.data
 }
 
 /**
  * Bind WeChat account
+ *
+ * 同 bindEmail：后端是 POST /api/oauth/wechat/bind，body 为 {code}。
  */
 export async function bindWeChat(code: string): Promise<ApiResponse> {
-  const res = await api.get(`/api/oauth/wechat/bind?code=${code}`)
+  const res = await api.post('/api/oauth/wechat/bind', { code })
   return res.data
 }
 

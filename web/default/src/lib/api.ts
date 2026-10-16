@@ -76,10 +76,13 @@ api.interceptors.response.use(
     const skip = error?.config?.skipErrorHandler
     if (!skip) {
       const status = error?.response?.status
+      const serverMessage = error?.response?.data?.message
 
       if (status === 401) {
-        // Unauthorized: clear auth state and show toast
-        toast.error(i18next.t('Session expired!'))
+        // 凭据失效（未登录 / 改密作废 / 账号被封禁 / 令牌无效）：清登录态并提示。
+        // 后端 401 会带上具体原因（已按 Accept-Language 翻译），优先展示它；
+        // 只有拿不到时才退回通用的"会话已过期"。
+        toast.error(serverMessage || i18next.t('Session expired!'))
         try {
           useAuthStore.getState().auth.reset()
         } catch {
@@ -87,9 +90,7 @@ api.interceptors.response.use(
         }
       } else {
         // Other errors: show error message from response or default
-        const msg =
-          error?.response?.data?.message || error?.message || 'Request error'
-        toast.error(msg)
+        toast.error(serverMessage || error?.message || 'Request error')
       }
     }
     return Promise.reject(error)

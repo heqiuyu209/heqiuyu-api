@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { formatQuota, parseQuotaFromDollars } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -37,7 +38,12 @@ import {
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { createUser, updateUser, getUser, getGroups } from '../api'
-import { BINDING_FIELDS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import {
+  BINDING_FIELDS,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+  USER_ROLE,
+} from '../constants'
 import {
   userFormSchema,
   type UserFormValues,
@@ -75,6 +81,14 @@ export function UsersMutateDrawer({
 
   const groups = groupsData?.data || []
 
+  // 与后端 CreateUser 的 `user.Role >= myRole` 门禁保持一致：只能创建严格低于
+  // 自己角色的账户。否则管理员会在下拉里选到「Admin」，提交后必然被拒。
+  const actorRole = useAuthStore((s) => s.auth.user?.role) ?? 0
+  const creatableRoles = [
+    { value: USER_ROLE.USER, label: t('Common User') },
+    { value: USER_ROLE.ADMIN, label: t('Admin') },
+  ].filter((option) => option.value < actorRole)
+
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
     defaultValues: USER_FORM_DEFAULT_VALUES,
@@ -82,18 +96,36 @@ export function UsersMutateDrawer({
 
   // Load existing data when updating
   useEffect(() => {
-    if (open && isUpdate && currentRow) {
+    if (!open) return
+
+    if (isUpdate && currentRow) {
       // For update, fetch fresh data
-      getUser(currentRow.id).then((result) => {
-        if (result.success && result.data) {
-          form.reset(transformUserToFormDefaults(result.data))
-        }
-      })
-    } else if (open && !isUpdate) {
-      // For create, reset to defaults
-      form.reset(USER_FORM_DEFAULT_VALUES)
+      let cancelled = false
+      getUser(currentRow.id)
+        .then((result) => {
+          if (cancelled) return
+          if (result.success && result.data) {
+            form.reset(transformUserToFormDefaults(result.data))
+            return
+          }
+          // 取数失败必须显式反馈：否则抽屉照常打开但表单是空的，
+          // 用户会以为"字段坏了 / 改了没反应"（管理员看同级/更高级别用户时就会这样）
+          toast.error(result.message || t(ERROR_MESSAGES.LOAD_FAILED))
+          onOpenChange(false)
+        })
+        .catch(() => {
+          if (cancelled) return
+          toast.error(t(ERROR_MESSAGES.UNEXPECTED))
+          onOpenChange(false)
+        })
+      return () => {
+        cancelled = true
+      }
     }
-  }, [open, isUpdate, currentRow, form])
+
+    // For create, reset to defaults
+    form.reset(USER_FORM_DEFAULT_VALUES)
+  }, [open, isUpdate, currentRow, form, onOpenChange, t])
 
   const { meta: currencyMeta } = getCurrencyDisplay()
   const currencyLabel = getCurrencyLabel()
@@ -212,10 +244,14 @@ export function UsersMutateDrawer({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value='1'>
-                              {t('Common User')}
-                            </SelectItem>
-                            <SelectItem value='10'>{t('Admin')}</SelectItem>
+                            {creatableRoles.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={String(option.value)}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormDescription>
