@@ -41,7 +41,7 @@ require (
 	github.com/shopspring/decimal v1.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tcolgate/mp3 v0.0.0-20170426193717-e79c5a46d300
-	github.com/tidwall/gjson v1.18.0
+	github.com/tidwall/gjson v1.20.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/tiktoken-go/tokenizer v0.6.2
 	github.com/yapingcat/gomedia v0.0.0-20240906162731-17feea57090c
