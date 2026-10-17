@@ -71,6 +71,9 @@ export function UsersMutateDrawer({
   const { triggerRefresh } = useUsers()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
+  // 更新已有用户时用户名默认只读；只有该用户的 username 是空的历史脏数据
+  // （这种账号会被鉴权中间件 403 锁死）时才放开输入，让管理员补填修复。
+  const [usernameEditable, setUsernameEditable] = useState(false)
 
   // Fetch groups
   const { data: groupsData } = useQuery({
@@ -99,6 +102,9 @@ export function UsersMutateDrawer({
     if (!open) return
 
     if (isUpdate && currentRow) {
+      // 先按列表里已有的数据决定用户名是否可编辑（列表行通常带 username），
+      // 再用详情接口的返回值校正。
+      setUsernameEditable(!(currentRow.username ?? '').trim())
       // For update, fetch fresh data
       let cancelled = false
       getUser(currentRow.id)
@@ -106,6 +112,7 @@ export function UsersMutateDrawer({
           if (cancelled) return
           if (result.success && result.data) {
             form.reset(transformUserToFormDefaults(result.data))
+            setUsernameEditable(!(result.data.username ?? '').trim())
             return
           }
           // 取数失败必须显式反馈：否则抽屉照常打开但表单是空的，
@@ -125,6 +132,7 @@ export function UsersMutateDrawer({
 
     // For create, reset to defaults
     form.reset(USER_FORM_DEFAULT_VALUES)
+    setUsernameEditable(false)
   }, [open, isUpdate, currentRow, form, onOpenChange, t])
 
   const { meta: currencyMeta } = getCurrencyDisplay()
@@ -134,6 +142,13 @@ export function UsersMutateDrawer({
   const currentQuotaRaw = form.watch('quota_dollars') || 0
 
   const onSubmit = async (data: UserFormValues) => {
+    // 用户名是登录标识，任何场景都必须非空：创建时要填；编辑时一般已由后端数据
+    // 预填，只有历史脏数据（用户名为空）才会放开输入并要求补填。
+    // 因此校验放在这里而不是 schema 里，避免出现「输入框禁用却提示必填」的死锁。
+    if ((data.username ?? '').trim() === '') {
+      form.setError('username', { message: t('Username is required') })
+      return
+    }
     setIsSubmitting(true)
     try {
       const payload = transformFormDataToPayload(data, currentRow?.id)
@@ -217,9 +232,16 @@ export function UsersMutateDrawer({
                         <Input
                           {...field}
                           placeholder={t('Enter username')}
-                          disabled={isUpdate}
+                          disabled={isUpdate && !usernameEditable}
                         />
                       </FormControl>
+                      {isUpdate && usernameEditable && (
+                        <FormDescription className='text-amber-600 dark:text-amber-500'>
+                          {t(
+                            'This user has no username (abnormal data; the account cannot log in). Please fill it in before saving.'
+                          )}
+                        </FormDescription>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

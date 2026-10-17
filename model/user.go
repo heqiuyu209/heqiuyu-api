@@ -596,8 +596,12 @@ func (user *User) UpdateAffCode(code string) error {
 // UpdateProfile 更新用户可自行修改的资料字段。
 func (user *User) UpdateProfile(updatePassword bool) error {
 	columns := map[string]interface{}{
-		"username":     user.Username,
 		"display_name": user.DisplayName,
+	}
+	// 用户名是登录标识，绝不能写成空值：空用户名的账号会被鉴权中间件
+	// validUserInfo 直接 403 锁死（controller.UpdateSelf 已保证不传空值，这里再兜一层）。
+	if trimmed := strings.TrimSpace(user.Username); trimmed != "" {
+		columns["username"] = trimmed
 	}
 	if updatePassword {
 		hashed, err := common.Password2Hash(user.Password)
@@ -647,10 +651,14 @@ func (user *User) UpdateAdminFields(fields map[string]interface{}) error {
 // Edit 由管理员更新用户资料（用户名/显示名/分组/备注，可选口令）。
 func (user *User) Edit(updatePassword bool) error {
 	columns := map[string]interface{}{
-		"username":     user.Username,
 		"display_name": user.DisplayName,
 		"group":        user.Group,
 		"remark":       user.Remark,
+	}
+	// 用户名是登录标识，绝不能写成空值：空用户名的账号会被鉴权中间件
+	// validUserInfo 直接 403 锁死（controller.UpdateUser 已拒绝空用户名，这里再兜一层）。
+	if trimmed := strings.TrimSpace(user.Username); trimmed != "" {
+		columns["username"] = trimmed
 	}
 	if updatePassword {
 		hashed, err := common.Password2Hash(user.Password)

@@ -575,11 +575,25 @@ func GetUserModels(c *gin.Context) {
 	return
 }
 
+// UpdateUser 管理员更新用户资料（可选同时改密）。
+//
+// 数据完整性约定：
+//   - username 是登录标识，空值一律拒绝。旧实现允许把 username 写成空串，而
+//     中间件 validUserInfo 会让空用户名的账号在所有接口上 403 —— 一次误调用就
+//     把账号永久锁死；管理员编辑抽屉里该字段又是只读的，于是再也救不回来。
+//   - 用户名变更前先做唯一性检查，避免把数据库唯一索引错误直接抛给前端。
+//   - 未提供的展示类字段（display_name / group）不会被零值覆盖，防止部分更新丢数据。
 func UpdateUser(c *gin.Context) {
 	var updatedUser model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&updatedUser)
 	if err != nil || updatedUser.Id == 0 {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	updatedUser.Username = strings.TrimSpace(updatedUser.Username)
+	updatedUser.DisplayName = strings.TrimSpace(updatedUser.DisplayName)
+	if updatedUser.Username == "" {
+		common.ApiErrorI18n(c, i18n.MsgUserUsernameRequired)
 		return
 	}
 	if updatedUser.Password == "" {
@@ -602,6 +616,25 @@ func UpdateUser(c *gin.Context) {
 	if myRole <= updatedUser.Role && myRole != common.RoleRootUser {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
+	}
+	// 用户名变更：唯一性检查（含软删除记录——users.username 上有唯一索引，
+	// 被软删除的用户仍会占用该用户名）。
+	if updatedUser.Username != originUser.Username {
+		exists, checkErr := model.CheckUserExistOrDeleted(updatedUser.Username, "")
+		if checkErr != nil {
+			common.ApiError(c, checkErr)
+			return
+		}
+		if exists {
+			common.ApiErrorI18n(c, i18n.MsgUserExists)
+			return
+		}
+	}
+	if updatedUser.DisplayName == "" {
+		updatedUser.DisplayName = updatedUser.Username
+	}
+	if updatedUser.Group == "" {
+		updatedUser.Group = originUser.Group
 	}
 	if updatedUser.Password == "$I_LOVE_U" {
 		updatedUser.Password = "" // rollback to what it should be
@@ -741,11 +774,33 @@ func UpdateSelf(c *gin.Context) {
 		return
 	}
 
+	userId := c.GetInt("id")
+	originUser, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// 只覆盖请求里**显式提供**的字段。
+	//
+	// 个人中心的「修改密码」弹窗只发送 original_password + password；旧实现直接
+	// 把反序列化出的零值 username / display_name 整列写回，于是一改自己的密码
+	// 用户名和显示名就被清空。用户名一旦为空，中间件 validUserInfo 会让该账号
+	// 所有请求 403（等于被永久锁死），且管理员编辑抽屉里的用户名是只读的，
+	// 无法补救 —— 这正是用户反馈的「用户名是空的、要填又填不了」。
 	cleanUser := model.User{
-		Id:          c.GetInt("id"),
-		Username:    user.Username,
+		Id:          userId,
+		Username:    originUser.Username,
+		DisplayName: originUser.DisplayName,
 		Password:    user.Password,
-		DisplayName: user.DisplayName,
+	}
+	if _, provided := requestData["username"]; provided {
+		if trimmed := strings.TrimSpace(user.Username); trimmed != "" {
+			cleanUser.Username = trimmed
+		}
+	}
+	if _, provided := requestData["display_name"]; provided {
+		cleanUser.DisplayName = strings.TrimSpace(user.DisplayName)
 	}
 	if user.Password == "$I_LOVE_U" {
 		user.Password = "" // rollback to what it should be
