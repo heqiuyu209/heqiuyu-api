@@ -3,7 +3,8 @@ import { useEffect, useRef } from 'react'
 declare global {
   interface Window {
     turnstile?: {
-      render: (element: HTMLElement, options: Record<string, unknown>) => void
+      render: (element: HTMLElement, options: Record<string, unknown>) => string
+      reset: (widgetId?: string) => void
     }
   }
 }
@@ -13,6 +14,12 @@ interface TurnstileProps {
   onVerify: (token: string) => void
   onExpire?: () => void
   className?: string
+  /**
+   * Increment this value to reset the widget.
+   * Turnstile tokens are single-use, so callers must reset after a failed or
+   * already-consumed submission to obtain a fresh token.
+   */
+  resetSignal?: number
 }
 
 export function Turnstile({
@@ -20,14 +27,17 @@ export function Turnstile({
   onVerify,
   onExpire,
   className,
+  resetSignal = 0,
 }: TurnstileProps) {
-  const ref = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const widgetIdRef = useRef<string | null>(null)
+  const lastResetSignalRef = useRef(resetSignal)
 
   useEffect(() => {
     const render = () => {
-      if (!ref.current || !window.turnstile) return
+      if (!containerRef.current || !window.turnstile) return
       try {
-        window.turnstile.render(ref.current, {
+        widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
           callback: (token: string) => onVerify(token),
           'error-callback': () => onExpire?.(),
@@ -54,5 +64,16 @@ export function Turnstile({
     document.head.appendChild(s)
   }, [siteKey, onVerify, onExpire])
 
-  return <div ref={ref} className={className} />
+  useEffect(() => {
+    if (lastResetSignalRef.current === resetSignal) return
+    lastResetSignalRef.current = resetSignal
+    if (!widgetIdRef.current || !window.turnstile) return
+    try {
+      window.turnstile.reset(widgetIdRef.current)
+    } catch {
+      /* empty */
+    }
+  }, [resetSignal])
+
+  return <div ref={containerRef} className={className} />
 }

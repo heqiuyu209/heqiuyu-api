@@ -14,6 +14,11 @@ import type { SystemStatus } from '../types'
 type OAuthProvidersProps = {
   status: SystemStatus | null
   disabled?: boolean
+  /**
+   * Registration requires an invite code but the field is still empty: disable
+   * third-party sign-in and show a hint instead of letting the backend reject.
+   */
+  inviteCodeMissing?: boolean
   className?: string
   onWeChatLogin?: () => void
   isWeChatLoading?: boolean
@@ -30,6 +35,7 @@ type ProviderButton = {
 export function OAuthProviders({
   status,
   disabled = false,
+  inviteCodeMissing = false,
   className,
   onWeChatLogin,
   isWeChatLoading = false,
@@ -47,6 +53,7 @@ export function OAuthProviders({
     handleCustomOAuthLogin,
   } = useOAuthLogin(status)
 
+  const isProviderDisabled = disabled || inviteCodeMissing
   const providerButtons: ProviderButton[] = []
 
   if (status?.wechat_login && onWeChatLogin) {
@@ -119,6 +126,12 @@ export function OAuthProviders({
 
   return (
     <div className={cn('space-y-3', className)}>
+      {inviteCodeMissing && (
+        <p className='text-muted-foreground text-center text-xs'>
+          {t('Fill in the invite code before using third-party sign-in')}
+        </p>
+      )}
+
       <div className='relative'>
         <div className='absolute inset-0 flex items-center'>
           <span className='w-full border-t' />
@@ -137,7 +150,7 @@ export function OAuthProviders({
               key={key}
               variant='outline'
               type='button'
-              disabled={disabled || isLoading || extraDisabled}
+              disabled={isProviderDisabled || isLoading || extraDisabled}
               onClick={onClick}
               className='h-11 w-full justify-center gap-2 rounded-lg'
             >

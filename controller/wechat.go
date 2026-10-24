@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/i18n"
 	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/service"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -91,18 +93,37 @@ func WeChatAuth(c *gin.Context) {
 		}
 	} else {
 		if common.RegisterEnabled {
+			// 仅限邀请码注册：微信首登建号必须携带有效邀请码；
+			// 老用户在上面的分支已直接登录，不受影响。
+			inviterId := 0
+			if inviteCodeRequired() {
+				validatedInviterId, inviteErr := validateInviteCode(c.Query("invite_code"))
+				if inviteErr != nil {
+					respondInviteCodeError(c, inviteErr)
+					return
+				}
+				inviterId = validatedInviterId
+			}
+			// OAuth 首登建号同样受注册防护限流约束（计划 R2 §2）。
+			if decision := service.CheckRegistrationAttempt(c.ClientIP()); !decision.Allowed {
+				common.ApiErrorI18n(c, i18n.MsgUserRegistrationRateLimited)
+				return
+			}
 			user.Username = "wechat_" + strconv.Itoa(model.GetMaxUserId()+1)
 			user.DisplayName = "WeChat User"
 			user.Role = common.RoleCommonUser
 			user.Status = common.UserStatusEnabled
+			// 写入邀请人归因：0 也显式设置；Insert 的 inviterId 参数只用于奖励/日志。
+			user.InviterId = inviterId
 
-			if err := user.Insert(0); err != nil {
+			if err := user.Insert(inviterId); err != nil {
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,
 					"message": err.Error(),
 				})
 				return
 			}
+			service.RecordRegistrationSuccess(c.ClientIP())
 		} else {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,

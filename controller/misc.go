@@ -2,16 +2,19 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/constant"
+	"github.com/heqiuyu/heqiuyu-api/i18n"
 	"github.com/heqiuyu/heqiuyu-api/logger"
 	"github.com/heqiuyu/heqiuyu-api/middleware"
 	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/heqiuyu/heqiuyu-api/oauth"
+	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/setting"
 	"github.com/heqiuyu/heqiuyu-api/setting/console_setting"
 	"github.com/heqiuyu/heqiuyu-api/setting/operation_setting"
@@ -44,6 +47,13 @@ func GetStatus(c *gin.Context) {
 	cs := console_setting.GetConsoleSetting()
 	common.OptionMapRWMutex.RLock()
 	defer common.OptionMapRWMutex.RUnlock()
+
+	// 注册防护相关字段（register_enabled / password_register_enabled /
+	// oauth_register_enabled / registration_form_token_enabled /
+	// registration_honeypot_enabled）由 registration_status.go 统一提供。
+	// 在 RLock 之后读取：helper 会读 common.RegisterEnabled 与配置，必须与
+	// updateOptionMap 的写入串行化（helper 内部不会再次加锁）。
+	registrationFields := registrationStatusFields()
 
 	passkeySetting := system_setting.GetPasskeySettings()
 	legalSetting := system_setting.GetLegalSettings()
@@ -115,6 +125,11 @@ func GetStatus(c *gin.Context) {
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
+	}
+
+	// 合并注册防护状态字段（step6 的 registrationStatusFields）。
+	for key, value := range registrationFields {
+		data[key] = value
 	}
 
 	// 根据启用状态注入可选内容
@@ -226,8 +241,24 @@ func GetHomePageContent(c *gin.Context) {
 	return
 }
 
+// maskEmail 对日志中的邮箱做脱敏（a***@domain），避免明文邮箱进入日志。
+func maskEmail(email string) string {
+	email = strings.TrimSpace(email)
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		return "***"
+	}
+	localPart := email[:at]
+	domain := email[at+1:]
+	if len(localPart) == 0 {
+		return "***@" + domain
+	}
+	return localPart[:1] + "***@" + domain
+}
+
 func SendEmailVerification(c *gin.Context) {
-	email := c.Query("email")
+	// 邮箱统一规范化：验证码/限流/占用的键都必须与注册时一致。
+	email := strings.ToLower(strings.TrimSpace(c.Query("email")))
 	if err := common.Validate.Var(email, "required,email"); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -272,6 +303,21 @@ func SendEmailVerification(c *gin.Context) {
 		}
 	}
 
+	// 发码用途：purpose=register 表示注册用途（开启邀请码时使用注册专用验证码 "vr"），
+	// 其他用途（如绑定邮箱）仍使用普通 "v"。
+	emailPurpose := common.EmailVerificationPurpose
+	if strings.TrimSpace(c.Query("purpose")) == registerEmailPurposeParam {
+		emailPurpose = common.RegistrationEmailVerificationPurpose
+		// 开启邀请码时 controller 侧再校验一次（中间件 RegistrationInviteGuard 已先拦截），
+		// 保证任何调用路径都不会给无效邀请码发送注册验证码。
+		if inviteCodeRequired() {
+			if _, err := validateInviteCode(c.Query("invite_code")); err != nil {
+				respondInviteCodeError(c, err)
+				return
+			}
+		}
+	}
+
 	if model.IsEmailAlreadyTaken(email) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -279,15 +325,29 @@ func SendEmailVerification(c *gin.Context) {
 		})
 		return
 	}
-	code := common.GenerateVerificationCode(6)
-	common.RegisterVerificationCodeWithKey(email, code, common.EmailVerificationPurpose)
+	// 验证码位数 6 → 8（提高暴力猜测成本；错误次数另有 5 次锁定）。
+	code := common.GenerateVerificationCode(8)
+	common.RegisterVerificationCodeWithKey(email, code, emailPurpose)
 	subject := fmt.Sprintf("%s邮箱验证邮件", common.SystemName)
 	content := fmt.Sprintf("<p>您好，你正在进行%s邮箱验证。</p>"+
 		"<p>您的验证码为: <strong>%s</strong></p>"+
 		"<p>验证码 %d 分钟内有效，如果不是本人操作，请忽略。</p>", common.SystemName, code, common.VerificationValidMinutes)
-	err := common.SendEmail(subject, email, content)
-	if err != nil {
-		common.ApiError(c, err)
+	// 先存码再入队：入队失败必须删除验证码，避免"队列满但验证码仍有效"的悬挂状态。
+	if err := service.EnqueueEmail("verification", email, subject, content); err != nil {
+		common.DeleteKey(email, emailPurpose)
+		common.SysLog(fmt.Sprintf("[mail-queue] enqueue verification email failed for %s: %v", maskEmail(email), err))
+		if errors.Is(err, service.ErrMailRateLimited) {
+			c.Header("Retry-After", "60")
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"message": i18n.T(c, i18n.MsgUserEmailSendRateLimited),
+			})
+			return
+		}
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"message": i18n.T(c, i18n.MsgUserEmailSendUnavailable),
+		})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -298,7 +358,7 @@ func SendEmailVerification(c *gin.Context) {
 }
 
 func SendPasswordResetEmail(c *gin.Context) {
-	email := c.Query("email")
+	email := strings.ToLower(strings.TrimSpace(c.Query("email")))
 	if err := common.Validate.Var(email, "required,email"); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -315,15 +375,19 @@ func SendPasswordResetEmail(c *gin.Context) {
 			"<p>点击 <a href='%s'>此处</a> 进行密码重置。</p>"+
 			"<p>如果链接无法点击，请尝试点击下面的链接或将其复制到浏览器中打开：<br> %s </p>"+
 			"<p>重置链接 %d 分钟内有效，如果不是本人操作，请忽略。</p>", common.SystemName, link, link, common.VerificationValidMinutes)
-		err := common.SendEmail(subject, email, content)
-		if err != nil {
-			logger.LogError(c.Request.Context(), fmt.Sprintf("failed to send password reset email to %s: %s", email, err.Error()))
+		if err := service.EnqueueEmail("password-reset", email, subject, content); err != nil {
+			common.DeleteKey(email, common.PasswordResetPurpose)
+			// 该接口对"邮箱是否存在"必须保持不可区分：入队失败只记录日志，
+			// 仍返回成功（与历史行为一致），否则会泄露邮箱是否已注册。
+			common.SysLog(fmt.Sprintf("[mail-queue] enqueue password reset email failed for %s: %v", maskEmail(email), err))
+			logger.LogError(c.Request.Context(), fmt.Sprintf("failed to enqueue password reset email to %s: %s", maskEmail(email), err.Error()))
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 	})
+	return
 }
 
 type PasswordResetRequest struct {
@@ -342,13 +406,29 @@ func ResetPassword(c *gin.Context) {
 		})
 		return
 	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if !common.VerifyCodeWithKey(req.Email, req.Token, common.PasswordResetPurpose) {
+		locked, retryAfter := service.RegisterVerificationFailure(req.Email, common.PasswordResetPurpose)
+		if locked {
+			// 计划 §5.4：错误次数达到上限后删除验证码，窗口内即使猜中也无法继续使用。
+			common.DeleteKey(req.Email, common.PasswordResetPurpose)
+			if retryAfter <= 0 {
+				retryAfter = 60
+			}
+			c.Header("Retry-After", fmt.Sprintf("%d", retryAfter))
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"message": i18n.T(c, i18n.MsgUserVerificationAttemptsLimit),
+			})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "重置链接非法或已过期",
 		})
 		return
 	}
+	service.ClearVerificationFailures(req.Email, common.PasswordResetPurpose)
 	// 由用户自行设置新密码，服务端不再生成并在响应中回传明文密码。
 	if req.NewPassword == "" {
 		c.JSON(http.StatusOK, gin.H{

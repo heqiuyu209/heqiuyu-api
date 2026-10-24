@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -28,7 +28,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
-import { register, wechatLoginByCode } from '@/features/auth/api'
+import {
+  register,
+  getRegistrationToken,
+  wechatLoginByCode,
+} from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
 import { registerFormSchema } from '@/features/auth/constants'
@@ -37,6 +41,9 @@ import { useEmailVerification } from '@/features/auth/hooks/use-email-verificati
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
 import { getAffiliateCode } from '@/features/auth/lib/storage'
 import { isTwoFactorRequired } from '@/features/auth/lib/two-factor'
+
+// Shared with lib/oauth.ts (getOAuthState reads the invite code from here).
+const INVITE_CODE_STORAGE_KEY = 'invite_code'
 
 export function SignUpForm({
   className,
@@ -49,15 +56,29 @@ export function SignUpForm({
   const [wechatCode, setWeChatCode] = useState('')
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
+  // Honeypot field: invisible to users, must stay empty
+  const [website, setWebsite] = useState('')
+  // One-time registration form token
+  const [formToken, setFormToken] = useState('')
+  // Invite code (only used while registration requires one); persisted so OAuth
+  // redirects and page reloads keep it. Restored from localStorage only when the
+  // feature is enabled (see the effect below).
+  const [inviteCode, setInviteCode] = useState('')
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
 
   const { status } = useStatus()
+  const inviteCodeRequired = Boolean(
+    status?.invite_code_required ?? status?.data?.invite_code_required
+  )
+  const inviteCodeMissing = inviteCodeRequired && !inviteCode.trim()
   const {
     isTurnstileEnabled,
     turnstileSiteKey,
     turnstileToken,
     setTurnstileToken,
     validateTurnstile,
+    resetSignal,
+    resetTurnstile,
   } = useTurnstile()
   const { redirectToLogin, redirectTo2FA, handleLoginSuccess } =
     useAuthRedirect()
@@ -69,6 +90,9 @@ export function SignUpForm({
   } = useEmailVerification({
     turnstileToken,
     validateTurnstile,
+    inviteCode: inviteCodeRequired ? inviteCode.trim() || undefined : undefined,
+    purpose: 'register',
+    onAfterSend: resetTurnstile,
   })
 
   const form = useForm<z.infer<typeof registerFormSchema>>({
@@ -91,6 +115,74 @@ export function SignUpForm({
     status?.data?.oauth_register_enabled ??
     true
   const hasWeChatLogin = Boolean(status?.wechat_login)
+  const registerEnabled =
+    status?.register_enabled ?? status?.data?.register_enabled ?? true
+  const registrationFormTokenEnabled = Boolean(
+    status?.registration_form_token_enabled ??
+    status?.data?.registration_form_token_enabled
+  )
+  const honeypotEnabled = Boolean(
+    status?.registration_honeypot_enabled ??
+    status?.data?.registration_honeypot_enabled
+  )
+
+  const requestRegistrationToken = useCallback(async (): Promise<string> => {
+    // Drop the previous token first: it may already be consumed, so a
+    // concurrent submit must not reuse it while this refetch is in flight.
+    setFormToken('')
+    try {
+      const res = await getRegistrationToken()
+      const token = res?.data?.token ?? ''
+      if (res?.success && token) {
+        setFormToken(token)
+        return token
+      }
+    } catch (_error) {
+      // 404 when the feature is disabled; caller decides what to show
+    }
+    return ''
+  }, [])
+
+  useEffect(() => {
+    if (!registerEnabled || !registrationFormTokenEnabled) {
+      setFormToken('')
+      return
+    }
+    void requestRegistrationToken()
+  }, [registerEnabled, registrationFormTokenEnabled, requestRegistrationToken])
+
+  // Invite code persistence:
+  // - feature off: clear the stored value and the form state (never send it);
+  // - feature on: restore the stored value once, then keep localStorage in sync
+  //   so the OAuth redirect (lib/oauth.ts getOAuthState) can carry it.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!inviteCodeRequired) {
+      setInviteCode('')
+      window.localStorage.removeItem(INVITE_CODE_STORAGE_KEY)
+      return
+    }
+    const trimmed = inviteCode.trim()
+    if (!trimmed) {
+      const stored = window.localStorage.getItem(INVITE_CODE_STORAGE_KEY)
+      if (stored) {
+        setInviteCode(stored)
+        return
+      }
+    }
+    if (trimmed) {
+      window.localStorage.setItem(INVITE_CODE_STORAGE_KEY, trimmed)
+    } else {
+      window.localStorage.removeItem(INVITE_CODE_STORAGE_KEY)
+    }
+  }, [inviteCode, inviteCodeRequired])
+
+  // Prefill the invite code from the affiliate code when the user has one
+  // (an existing user's aff code is a valid invite code).
+  useEffect(() => {
+    if (!inviteCodeRequired) return
+    setInviteCode((current) => (current.trim() ? current : getAffiliateCode()))
+  }, [inviteCodeRequired])
 
   const wechatQrCodeUrl = useMemo(() => {
     return (
@@ -114,6 +206,21 @@ export function SignUpForm({
     }
   }, [requiresLegalConsent])
 
+  if (!registerEnabled) {
+    return (
+      <div className={cn('rounded-lg border p-6 text-center', className)}>
+        <h3 className='text-lg font-semibold'>
+          {t('Registration is currently closed')}
+        </h3>
+        <p className='text-muted-foreground mt-2 text-sm'>
+          {t(
+            'Registration is currently closed, please contact the administrator.'
+          )}
+        </p>
+      </div>
+    )
+  }
+
   async function onSubmit(data: z.infer<typeof registerFormSchema>) {
     if (requiresLegalConsent && !agreedToLegal) {
       toast.error(legalConsentErrorMessage)
@@ -132,6 +239,33 @@ export function SignUpForm({
       }
     }
 
+    // Invite code is mandatory for registration while the feature is enabled
+    if (inviteCodeMissing) {
+      toast.error(t('Please enter the invite code'))
+      return
+    }
+
+    // Turnstile tokens are single-use in strict mode
+    if (!validateTurnstile()) {
+      return
+    }
+
+    // Resolve a one-time form token when the feature is enabled
+    let token = formToken
+    if (registrationFormTokenEnabled) {
+      if (!token) {
+        token = await requestRegistrationToken()
+      }
+      if (!token) {
+        toast.error(
+          t(
+            'Failed to prepare registration verification. Please refresh the page and try again.'
+          )
+        )
+        return
+      }
+    }
+
     setIsLoading(true)
     try {
       const res = await register({
@@ -141,26 +275,50 @@ export function SignUpForm({
         verification_code: verificationCode || undefined,
         aff: getAffiliateCode(),
         turnstile: turnstileToken,
+        website: honeypotEnabled ? website : undefined,
+        form_token: registrationFormTokenEnabled ? token : undefined,
+        invite_code: inviteCodeRequired ? inviteCode.trim() : undefined,
       })
 
       if (res?.success) {
         toast.success(t('Account created! Please sign in'))
         redirectToLogin()
+        return
+      }
+
+      // The failed attempt may have consumed the form/turnstile token, so
+      // refresh both before the next submit.
+      resetTurnstile()
+      if (registrationFormTokenEnabled) {
+        void requestRegistrationToken()
       }
     } catch (_error) {
       // Errors are handled by global interceptor
+      resetTurnstile()
+      if (registrationFormTokenEnabled) {
+        void requestRegistrationToken()
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
   async function handleSendVerificationCode() {
+    if (inviteCodeMissing) {
+      toast.error(t('Please enter the invite code'))
+      return
+    }
     await sendCode(emailValue || '')
   }
 
   const handleOpenWeChatDialog = () => {
     if (requiresLegalConsent && !agreedToLegal) {
       toast.error(legalConsentErrorMessage)
+      return
+    }
+
+    if (inviteCodeMissing) {
+      toast.error(t('Please enter the invite code'))
       return
     }
 
@@ -176,6 +334,11 @@ export function SignUpForm({
   }
 
   async function handleWeChatLogin() {
+    if (inviteCodeMissing) {
+      toast.error(t('Please enter the invite code'))
+      return
+    }
+
     if (!wechatCode.trim()) {
       toast.error(t('Please enter the verification code'))
       return
@@ -183,7 +346,10 @@ export function SignUpForm({
 
     setIsWeChatSubmitting(true)
     try {
-      const res = await wechatLoginByCode(wechatCode)
+      const res = await wechatLoginByCode(
+        wechatCode,
+        inviteCodeRequired ? inviteCode.trim() : undefined
+      )
       if (res?.success) {
         if (isTwoFactorRequired(res.data)) {
           toast.info(t('Please enter the authentication code.'))
@@ -212,6 +378,25 @@ export function SignUpForm({
         className={cn('grid gap-4', className)}
         {...props}
       >
+        {/* Honeypot: hidden from users and assistive tech; bots that fill it are rejected */}
+        {honeypotEnabled && (
+          <div
+            aria-hidden='true'
+            className='pointer-events-none absolute -left-[9999px] h-0 w-0 overflow-hidden'
+          >
+            <label htmlFor='website'>Website</label>
+            <input
+              id='website'
+              name='website'
+              type='text'
+              tabIndex={-1}
+              autoComplete='off'
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+            />
+          </div>
+        )}
+
         {/* Username Field */}
         <FormField
           control={form.control}
@@ -260,6 +445,25 @@ export function SignUpForm({
           )}
         />
 
+        {/* Invite code: only shown (and sent) while registration requires one */}
+        {inviteCodeRequired && (
+          <div className='space-y-2'>
+            <Label htmlFor='invite-code'>{t('Invite Code')}</Label>
+            <Input
+              id='invite-code'
+              placeholder={t('Enter the invite code')}
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value)}
+              autoComplete='off'
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Invite code is required to register. Please contact the administrator if you do not have one.'
+              )}
+            </p>
+          </div>
+        )}
+
         {/* Email Verification Section */}
         {emailVerificationRequired && (
           <>
@@ -296,7 +500,13 @@ export function SignUpForm({
               <Button
                 variant='outline'
                 type='button'
-                disabled={isLoading || isSendingCode || isActive || !emailValue}
+                disabled={
+                  isLoading ||
+                  isSendingCode ||
+                  isActive ||
+                  !emailValue ||
+                  inviteCodeMissing
+                }
                 onClick={handleSendVerificationCode}
               >
                 {isActive ? (
@@ -308,17 +518,18 @@ export function SignUpForm({
                 )}
               </Button>
             </div>
-
-            {/* Turnstile */}
-            {isTurnstileEnabled && (
-              <div className='mt-2'>
-                <Turnstile
-                  siteKey={turnstileSiteKey}
-                  onVerify={setTurnstileToken}
-                />
-              </div>
-            )}
           </>
+        )}
+
+        {/* Turnstile: rendered whenever enabled, independent from email verification */}
+        {isTurnstileEnabled && (
+          <div className='mt-2'>
+            <Turnstile
+              siteKey={turnstileSiteKey}
+              onVerify={setTurnstileToken}
+              resetSignal={resetSignal}
+            />
+          </div>
         )}
 
         <LegalConsent
@@ -331,7 +542,11 @@ export function SignUpForm({
         {/* Submit Button */}
         <Button
           className='mt-2 w-full justify-center gap-2'
-          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+          disabled={
+            isLoading ||
+            (requiresLegalConsent && !agreedToLegal) ||
+            inviteCodeMissing
+          }
         >
           {isLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
           {t('Create account')}
@@ -341,6 +556,7 @@ export function SignUpForm({
           <OAuthProviders
             status={status}
             disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+            inviteCodeMissing={inviteCodeMissing}
             onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
             isWeChatLoading={isWeChatSubmitting}
             className='pt-2'

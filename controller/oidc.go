@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/i18n"
 	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/service"
 	"github.com/heqiuyu/heqiuyu-api/setting/system_setting"
 
 	"github.com/gin-contrib/sessions"
@@ -142,7 +144,23 @@ func OidcAuth(c *gin.Context) {
 		}
 	} else {
 		if common.RegisterEnabled {
-			user.Email = oidcUser.Email
+			// 仅限邀请码注册：先校验邀请码（首登建号必须携带有效邀请码；防御性同步统一 OAuth 流程）。
+			inviterId := 0
+			if inviteCodeRequired() {
+				validatedInviterId, inviteErr := validateInviteCode(sessionInviteCode(session))
+				if inviteErr != nil {
+					respondInviteCodeError(c, inviteErr)
+					return
+				}
+				inviterId = validatedInviterId
+			}
+			// 注册防护：OAuth 首登建号同样受注册防护限流约束（计划 R2 §2）。
+			if decision := service.CheckRegistrationAttempt(c.ClientIP()); !decision.Allowed {
+				common.ApiErrorI18n(c, i18n.MsgUserRegistrationRateLimited)
+				return
+			}
+			// 邮箱统一 lower+trim，与注册/发码/DB 唯一索引的大小写不敏感策略一致。
+			user.Email = strings.ToLower(strings.TrimSpace(oidcUser.Email))
 			if oidcUser.PreferredUsername != "" {
 				user.Username = oidcUser.PreferredUsername
 			} else {
@@ -153,7 +171,9 @@ func OidcAuth(c *gin.Context) {
 			} else {
 				user.DisplayName = "OIDC User"
 			}
-			err := user.Insert(0)
+			// 写入邀请人归因：0 也显式设置；Insert 的 inviterId 参数只用于奖励/日志。
+			user.InviterId = inviterId
+			err := user.Insert(inviterId)
 			if err != nil {
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,
@@ -161,6 +181,7 @@ func OidcAuth(c *gin.Context) {
 				})
 				return
 			}
+			service.RecordRegistrationSuccess(c.ClientIP())
 		} else {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,

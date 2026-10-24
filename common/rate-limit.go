@@ -1,14 +1,26 @@
 package common
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
+
+// inMemoryRateLimiterMaxKeysDefault 是内存限流器的键数量硬上限默认值。
+const inMemoryRateLimiterMaxKeysDefault = 100000
+
+// InMemoryRateLimiterMaxKeys 是内存限流器的键数量硬上限。
+//
+// 声明为变量而不是常量，便于测试调小后验证逐出逻辑；生产环境使用默认 100000，
+// 避免未认证请求用海量 key 把内存撑爆。
+var InMemoryRateLimiterMaxKeys = inMemoryRateLimiterMaxKeysDefault
 
 type InMemoryRateLimiter struct {
 	store              map[string]*[]int64
 	mutex              sync.Mutex
 	expirationDuration time.Duration
+	// stopCh 用于停止后台清理 goroutine；Close 后置 nil。
+	stopCh chan struct{}
 }
 
 func (l *InMemoryRateLimiter) Init(expirationDuration time.Duration) {
@@ -17,27 +29,105 @@ func (l *InMemoryRateLimiter) Init(expirationDuration time.Duration) {
 		if l.store == nil {
 			l.store = make(map[string]*[]int64)
 			l.expirationDuration = expirationDuration
+			stopCh := make(chan struct{})
+			l.stopCh = stopCh
 			if expirationDuration > 0 {
-				go l.clearExpiredItems()
+				go l.clearExpiredItems(stopCh)
 			}
 		}
 		l.mutex.Unlock()
 	}
 }
 
-func (l *InMemoryRateLimiter) clearExpiredItems() {
+// Close 停止后台清理 goroutine。可重复调用（幂等）。
+func (l *InMemoryRateLimiter) Close() {
+	l.mutex.Lock()
+	if l.stopCh != nil {
+		close(l.stopCh)
+		l.stopCh = nil
+	}
+	l.mutex.Unlock()
+}
+
+func (l *InMemoryRateLimiter) clearExpiredItems(stopCh <-chan struct{}) {
+	ticker := time.NewTicker(l.expirationDuration)
+	defer ticker.Stop()
 	for {
-		time.Sleep(l.expirationDuration)
-		l.mutex.Lock()
-		now := time.Now().Unix()
-		for key := range l.store {
-			queue := l.store[key]
-			size := len(*queue)
-			if size == 0 || now-(*queue)[size-1] > int64(l.expirationDuration.Seconds()) {
-				delete(l.store, key)
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			l.mutex.Lock()
+			now := time.Now().Unix()
+			for key := range l.store {
+				queue := l.store[key]
+				size := len(*queue)
+				if size == 0 || now-(*queue)[size-1] > int64(l.expirationDuration.Seconds()) {
+					delete(l.store, key)
+				}
 			}
+			l.mutex.Unlock()
 		}
-		l.mutex.Unlock()
+	}
+}
+
+// Size 返回当前键数量（测试钩子）。
+func (l *InMemoryRateLimiter) Size() int {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	return len(l.store)
+}
+
+// evictIfFullLocked 在键数量达到上限时清理过期键；仍超限则按"最后活跃时间"
+// 批量逐出最旧键（至少腾出 10% 名额），保证内存占用有硬上限。
+// 调用方必须持有 l.mutex。
+func (l *InMemoryRateLimiter) evictIfFullLocked(now int64) {
+	maxKeys := InMemoryRateLimiterMaxKeys
+	if maxKeys <= 0 {
+		maxKeys = inMemoryRateLimiterMaxKeysDefault
+	}
+	if len(l.store) < maxKeys {
+		return
+	}
+	expiration := int64(l.expirationDuration.Seconds())
+	// 先清理过期键（判定与 clearExpiredItems 一致）。
+	for key, queue := range l.store {
+		if queue == nil || len(*queue) == 0 {
+			delete(l.store, key)
+			continue
+		}
+		if expiration > 0 && now-(*queue)[len(*queue)-1] > expiration {
+			delete(l.store, key)
+		}
+	}
+	if len(l.store) < maxKeys {
+		return
+	}
+	// 仍然超限：按最后活跃时间升序批量逐出最旧键。
+	type keyActivity struct {
+		key  string
+		last int64
+	}
+	entries := make([]keyActivity, 0, len(l.store))
+	for key, queue := range l.store {
+		last := int64(0)
+		if queue != nil && len(*queue) > 0 {
+			last = (*queue)[len(*queue)-1]
+		}
+		entries = append(entries, keyActivity{key: key, last: last})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].last < entries[j].last })
+	// 每次至少腾出 1 个位置：maxKeys<10 时 maxKeys/10 为 0，若直接用会导致永不逐出。
+	step := maxKeys / 10
+	if step < 1 {
+		step = 1
+	}
+	target := maxKeys - step
+	if target < 0 {
+		target = 0
+	}
+	for i := 0; i < len(entries) && len(l.store) > target; i++ {
+		delete(l.store, entries[i].key)
 	}
 }
 
@@ -88,6 +178,7 @@ func (l *InMemoryRateLimiter) Request(key string, maxRequestNum int, duration in
 			}
 		}
 	} else {
+		l.evictIfFullLocked(now)
 		s := make([]int64, 0, maxRequestNum)
 		l.store[key] = &s
 		*(l.store[key]) = append(*(l.store[key]), now)

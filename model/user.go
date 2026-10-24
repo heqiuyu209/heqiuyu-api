@@ -168,17 +168,25 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 	return string(configBytes)
 }
 
+// normalizeEmailQuery 统一邮箱查询入参：去空格 + 小写。
+//
+// 历史数据里可能存有大写邮箱，且 SQLite/MySQL/PostgreSQL 的等值比较大小写行为
+// 不一致；本轮统一改为 LOWER(email) = ? 的应用层大小写不敏感匹配（不做 DB 迁移）。
+func normalizeEmailQuery(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
 // CheckUserExistOrDeleted check if user exist or deleted, if not exist, return false, nil, if deleted or exist, return true, nil
 func CheckUserExistOrDeleted(username string, email string) (bool, error) {
 	var user User
 
-	// err := DB.Unscoped().First(&user, "username = ? or email = ?", username, email).Error
-	// check email if empty
+	// 邮箱按大小写不敏感匹配（历史数据可能大写），用户名保持原有语义。
+	email = normalizeEmailQuery(email)
 	var err error
 	if email == "" {
 		err = DB.Unscoped().First(&user, "username = ?", username).Error
 	} else {
-		err = DB.Unscoped().First(&user, "username = ? or email = ?", username, email).Error
+		err = DB.Unscoped().First(&user, "username = ? OR LOWER(email) = ?", username, email).Error
 	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -641,9 +649,19 @@ func (user *User) UpdateAdminFields(fields map[string]interface{}) error {
 	}
 	columns := make(map[string]interface{}, len(fields))
 	for k, v := range fields {
-		if _, ok := allowed[k]; ok {
-			columns[k] = v
+		if _, ok := allowed[k]; !ok {
+			continue
 		}
+		// 用户名（登录标识）同样不允许写成空值。
+		if k == "username" {
+			s, isString := v.(string)
+			if !isString || strings.TrimSpace(s) == "" {
+				continue
+			}
+			columns[k] = strings.TrimSpace(s)
+			continue
+		}
+		columns[k] = v
 	}
 	return updateColumns(user.Id, columns)
 }
@@ -733,8 +751,8 @@ func (user *User) ValidateAndFill() (err error) {
 	if username == "" || password == "" {
 		return ErrUserEmptyCredentials
 	}
-	// find by username or email
-	err = DB.Where("username = ? OR email = ?", username, username).First(user).Error
+	// find by username or email（邮箱大小写不敏感，兼容历史大写数据）
+	err = DB.Where("username = ? OR LOWER(email) = ?", username, strings.ToLower(username)).First(user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrInvalidCredentials
@@ -760,7 +778,7 @@ func (user *User) FillUserByEmail() error {
 	if user.Email == "" {
 		return errors.New("email 为空！")
 	}
-	DB.Where(User{Email: user.Email}).First(user)
+	DB.Where("LOWER(email) = ?", normalizeEmailQuery(user.Email)).First(user)
 	return nil
 }
 
@@ -816,7 +834,10 @@ func (user *User) FillUserByTelegramId() error {
 }
 
 func IsEmailAlreadyTaken(email string) bool {
-	return DB.Unscoped().Where("email = ?", email).Find(&User{}).RowsAffected == 1
+	// 历史实现用 == 1 判断，一旦遇到重复邮箱（唯一索引缺失或软删除历史数据）
+	// RowsAffected 可能大于 1，反而被判为"未占用"。这里改为 > 0。
+	// 同时按大小写不敏感匹配，避免历史大写邮箱绕过占用检查。
+	return DB.Unscoped().Where("LOWER(email) = ?", normalizeEmailQuery(email)).Find(&User{}).RowsAffected > 0
 }
 
 func IsWeChatIdAlreadyTaken(wechatId string) bool {
@@ -843,6 +864,7 @@ func ResetUserPasswordByEmail(email string, password string) error {
 	if email == "" || password == "" {
 		return errors.New("邮箱地址或密码为空！")
 	}
+	email = normalizeEmailQuery(email)
 	hashedPassword, err := common.Password2Hash(password)
 	if err != nil {
 		return err
@@ -850,11 +872,11 @@ func ResetUserPasswordByEmail(email string, password string) error {
 	// 改密属于凭据轮换事件：密码更新与 auth_version 自增必须在同一事务内完成，
 	// 使改密前签发的所有登录会话 cookie 立即失效（审计报告 R1）。
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&User{}).Where("email = ?", email).
+		if err := tx.Model(&User{}).Where("LOWER(email) = ?", email).
 			Update("password", hashedPassword).Error; err != nil {
 			return err
 		}
-		return tx.Model(&User{}).Where("email = ?", email).
+		return tx.Model(&User{}).Where("LOWER(email) = ?", email).
 			UpdateColumn("auth_version", gorm.Expr("auth_version + 1")).Error
 	})
 }

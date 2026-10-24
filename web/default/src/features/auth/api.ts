@@ -5,8 +5,13 @@ import type {
   Login2FAResponse,
   TwoFAPayload,
   RegisterPayload,
+  RegistrationTokenResponse,
   ApiResponse,
 } from './types'
+
+// OAuth state is created by the shared implementation in @/lib/oauth so that
+// every OAuth entry point carries both aff and invite_code (from localStorage).
+export { getOAuthState } from '@/lib/oauth'
 
 // ============================================================================
 // Authentication APIs
@@ -66,18 +71,14 @@ export async function githubOAuthStart(clientId: string, state: string) {
   window.open(url)
 }
 
-// Get OAuth state for CSRF protection
-export async function getOAuthState(): Promise<string> {
-  const aff =
-    typeof window !== 'undefined' ? (localStorage.getItem('aff') ?? '') : ''
-  const res = await api.get('/api/oauth/state', { params: { aff } })
-  if (res.data?.success) return res.data.data
-  return ''
-}
-
 // WeChat login by authorization code
-export async function wechatLoginByCode(code: string): Promise<ApiResponse> {
-  const res = await api.get('/api/oauth/wechat', { params: { code } })
+export async function wechatLoginByCode(
+  code: string,
+  inviteCode?: string
+): Promise<ApiResponse> {
+  const res = await api.get('/api/oauth/wechat', {
+    params: { code, invite_code: inviteCode },
+  })
   return res.data
 }
 
@@ -93,13 +94,34 @@ export async function register(payload: RegisterPayload): Promise<ApiResponse> {
   return res.data
 }
 
+// Get a one-time registration form token (404 when the feature is disabled)
+export async function getRegistrationToken(): Promise<RegistrationTokenResponse> {
+  const res = await api.get<RegistrationTokenResponse>(
+    '/api/user/register/token',
+    {
+      // 404 when form tokens are disabled; don't show a global error toast.
+      skipErrorHandler: true,
+    } as Record<string, unknown>
+  )
+  return res.data
+}
+
 // Send email verification code
+// purpose="register" scopes the code to registration (and carries the invite
+// code when registration requires one); other callers omit it.
 export async function sendEmailVerification(
   email: string,
-  turnstile?: string
+  turnstile?: string,
+  inviteCode?: string,
+  purpose?: string
 ): Promise<ApiResponse> {
   const res = await api.get('/api/verification', {
-    params: { email, turnstile },
+    params: {
+      email,
+      turnstile,
+      invite_code: inviteCode,
+      purpose,
+    },
   })
   return res.data
 }

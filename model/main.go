@@ -269,6 +269,75 @@ func migrateDB() error {
 			return err
 		}
 	}
+	// 尽力创建 email 唯一索引（历史数据有重复时跳过并告警，不阻断启动）。
+	_ = EnsureUserEmailUniquenessBestEffort(DB)
+	return nil
+}
+
+// EnsureUserEmailUniquenessBestEffort 在迁移后尽力创建 users.email 的数据库级唯一索引。
+//
+// 仅由启动迁移（migrateDB / migrateDBFast）调用；自动化测试可显式调用该函数
+// （e2e 测试通常只做 AutoMigrate，不会触发启动迁移）。调用方应忽略返回的 error：
+// 函数内部已 SysLog，重复邮箱/索引已存在/任何创建失败都不会阻断启动。
+//
+// 应用层已按 LOWER(email) 做大小写不敏感去重；DB 唯一索引用于兜底并发竞态。
+// 历史数据可能存在重复/空邮箱，因此这是 best-effort：
+//   - 先检查是否存在重复邮箱（大小写不敏感），有重复则跳过并告警，不删数据、不阻断启动；
+//   - SQLite/PostgreSQL：部分唯一索引，仅对非空 email 生效；
+//   - MySQL：生成列 email_unique（把空 email 映射为 NULL）+ 唯一索引；
+//   - 索引已存在时直接返回 nil；任何创建错误只记录日志并返回 error。
+func EnsureUserEmailUniquenessBestEffort(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("email unique index: nil db")
+	}
+	var duplicateGroups int64
+	if err := db.Raw(
+		"SELECT COUNT(*) FROM (SELECT LOWER(email) FROM users WHERE email <> '' GROUP BY LOWER(email) HAVING COUNT(*) > 1) AS duplicate_email_groups",
+	).Scan(&duplicateGroups).Error; err != nil {
+		common.SysLog("[registration-guard] skip email unique index: duplicate check failed: " + err.Error())
+		return err
+	}
+	if duplicateGroups > 0 {
+		common.SysLog(fmt.Sprintf("[registration-guard] skip email unique index: %d duplicate email group(s) exist; clean duplicates manually and restart", duplicateGroups))
+		return fmt.Errorf("email unique index skipped: %d duplicate email group(s) exist", duplicateGroups)
+	}
+
+	if common.UsingMySQL {
+		// MySQL 不支持部分/表达式唯一索引，用 STORED 生成列把空邮箱映射为 NULL。
+		var columnCount int64
+		if err := db.Raw(
+			"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'email_unique'",
+		).Scan(&columnCount).Error; err != nil {
+			common.SysLog("[registration-guard] skip email unique index: inspect generated column failed: " + err.Error())
+			return err
+		}
+		if columnCount == 0 {
+			// 类型与 email 列（validate max=50）保持一致，避免旧 InnoDB 键长超限。
+			if err := db.Exec("ALTER TABLE users ADD COLUMN email_unique VARCHAR(50) GENERATED ALWAYS AS (IF(email = '', NULL, email)) STORED").Error; err != nil {
+				common.SysLog("[registration-guard] skip email unique index: add generated column failed: " + err.Error())
+				return err
+			}
+		}
+		var indexCount int64
+		if err := db.Raw(
+			"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'users' AND index_name = 'email_unique_idx'",
+		).Scan(&indexCount).Error; err != nil {
+			common.SysLog("[registration-guard] skip email unique index: inspect index failed: " + err.Error())
+			return err
+		}
+		if indexCount == 0 {
+			if err := db.Exec("CREATE UNIQUE INDEX email_unique_idx ON users (email_unique)").Error; err != nil {
+				common.SysLog("[registration-guard] create email unique index failed: " + err.Error())
+				return err
+			}
+		}
+		return nil
+	}
+
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE email <> ''").Error; err != nil {
+		common.SysLog("[registration-guard] create email unique index failed: " + err.Error())
+		return err
+	}
 	return nil
 }
 
@@ -336,6 +405,8 @@ func migrateDBFast() error {
 			return err
 		}
 	}
+	// 尽力创建 email 唯一索引（历史数据有重复时跳过并告警，不阻断启动）。
+	_ = EnsureUserEmailUniquenessBestEffort(DB)
 	common.SysLog("database migrated")
 	return nil
 }

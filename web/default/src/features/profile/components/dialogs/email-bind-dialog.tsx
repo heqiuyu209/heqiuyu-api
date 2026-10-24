@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -14,6 +14,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Turnstile } from '@/components/turnstile'
+import { EMAIL_VERIFICATION_CODE_LENGTH } from '@/features/auth/constants'
+import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
 import { sendEmailVerification, bindEmail } from '../../api'
 
 // ============================================================================
@@ -46,6 +49,22 @@ export function EmailBindDialog({
   } = useCountdown({
     initialSeconds: 60,
   })
+  const {
+    isTurnstileEnabled,
+    turnstileSiteKey,
+    turnstileToken,
+    setTurnstileToken,
+    validateTurnstile,
+    resetSignal,
+    resetTurnstile,
+  } = useTurnstile()
+
+  // A fresh dialog session must not reuse a token from a previous one.
+  useEffect(() => {
+    if (open) {
+      resetTurnstile()
+    }
+  }, [open, resetTurnstile])
 
   const handleSendCode = async () => {
     if (!email || !email.includes('@')) {
@@ -53,9 +72,13 @@ export function EmailBindDialog({
       return
     }
 
+    if (!validateTurnstile()) {
+      return
+    }
+
     try {
       setSendingCode(true)
-      const response = await sendEmailVerification(email)
+      const response = await sendEmailVerification(email, turnstileToken)
 
       if (response.success) {
         toast.success(t('Verification code sent! Please check your email.'))
@@ -67,6 +90,9 @@ export function EmailBindDialog({
       toast.error(t('Failed to send verification code'))
     } finally {
       setSendingCode(false)
+      // Strict Turnstile mode verifies every request, so the single-use token
+      // must be refreshed for the next send.
+      resetTurnstile()
     }
   }
 
@@ -146,7 +172,7 @@ export function EmailBindDialog({
                 onChange={(e) => setCode(e.target.value)}
                 placeholder={t('Enter code')}
                 disabled={loading}
-                maxLength={6}
+                maxLength={EMAIL_VERIFICATION_CODE_LENGTH}
               />
               <Button
                 type='button'
@@ -162,6 +188,16 @@ export function EmailBindDialog({
               </Button>
             </div>
           </div>
+
+          {isTurnstileEnabled && (
+            <div className='mt-2'>
+              <Turnstile
+                siteKey={turnstileSiteKey}
+                onVerify={setTurnstileToken}
+                resetSignal={resetSignal}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter>

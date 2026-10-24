@@ -38,6 +38,8 @@ export function ForgotPasswordForm({
     turnstileToken,
     setTurnstileToken,
     validateTurnstile,
+    resetSignal,
+    resetTurnstile,
   } = useTurnstile()
   const {
     secondsLeft,
@@ -65,6 +67,9 @@ export function ForgotPasswordForm({
       // Errors are handled by global interceptor
     } finally {
       setIsLoading(false)
+      // Strict Turnstile mode verifies every request, so the single-use token
+      // must be refreshed before the next send.
+      resetTurnstile()
     }
   }
 
@@ -99,6 +104,7 @@ export function ForgotPasswordForm({
             <Turnstile
               siteKey={turnstileSiteKey}
               onVerify={setTurnstileToken}
+              resetSignal={resetSignal}
             />
           </div>
         )}

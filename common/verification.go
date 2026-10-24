@@ -21,7 +21,10 @@ type verificationValue struct {
 
 const (
 	EmailVerificationPurpose = "v"
-	PasswordResetPurpose     = "r"
+	// RegistrationEmailVerificationPurpose 是"仅限邀请码注册"开启时注册用途的
+	// 邮箱验证码 purpose；与普通邮箱验证码（"v"）隔离，避免 "v" 绕过邀请码注册。
+	RegistrationEmailVerificationPurpose = "vr"
+	PasswordResetPurpose                 = "r"
 )
 
 var (
@@ -96,6 +99,29 @@ func VerifyCodeWithKey(key string, code string, purpose string) bool {
 		return false
 	}
 	return constantTimeEqual(value.code, code)
+}
+
+// HasVerificationCode 判断指定 key+purpose 是否还存在未过期的验证码（不比较明文）。
+//
+// 用于注册流程在邀请码关闭时判断"vr"是否仍存在：存在则只按 "vr" 尝试并按其
+// 计数/锁定，避免回退 "v" 造成绕过或锁定计数记错 purpose。
+func HasVerificationCode(key string, purpose string) bool {
+	if RedisEnabled && RDB != nil {
+		ctx := context.Background()
+		exists, err := RDB.Exists(ctx, verificationRedisKey(purpose, key)).Result()
+		if err == nil {
+			return exists > 0
+		}
+		SysLog("failed to check verification code in redis, falling back to in-memory store")
+	}
+
+	verificationMutex.Lock()
+	defer verificationMutex.Unlock()
+	value, okay := verificationMap[purpose+key]
+	if !okay {
+		return false
+	}
+	return int(time.Since(value.time).Seconds()) < VerificationValidMinutes*60
 }
 
 func DeleteKey(key string, purpose string) {

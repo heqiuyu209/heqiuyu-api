@@ -8,6 +8,16 @@ import { EMAIL_VERIFICATION_COUNTDOWN } from '../constants'
 interface UseEmailVerificationOptions {
   turnstileToken?: string
   validateTurnstile?: () => boolean
+  /** Invite code forwarded to the backend when registration requires one. */
+  inviteCode?: string
+  /** Verification purpose; the sign-up form must use "register". */
+  purpose?: string
+  /**
+   * Called after a verification email request has been attempted (success or
+   * failure). Strict Turnstile mode verifies every request, so the single-use
+   * token must be refreshed by resetting the widget.
+   */
+  onAfterSend?: () => void
 }
 
 /**
@@ -37,18 +47,26 @@ export function useEmailVerification(options?: UseEmailVerificationOptions) {
 
     setIsSending(true)
     try {
-      const res = await sendEmailVerification(email, options?.turnstileToken)
+      const res = await sendEmailVerification(
+        email,
+        options?.turnstileToken,
+        options?.inviteCode,
+        options?.purpose
+      )
       if (res?.success) {
         startCountdown()
         toast.success(i18next.t('Verification email sent'))
         return true
       }
+      // Business failures (200 + success=false) are already surfaced with the
+      // backend message by the global axios interceptor; don't duplicate it.
       return false
     } catch (_error) {
       // Errors are handled by global interceptor
       return false
     } finally {
       setIsSending(false)
+      options?.onAfterSend?.()
     }
   }
 

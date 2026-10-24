@@ -98,7 +98,8 @@ func SendEmail(subject string, receiver string, content string) error {
 		err = smtp.SendMail(addr, auth, SMTPFrom, to, mail)
 	}
 	if err != nil {
-		SysError(fmt.Sprintf("failed to send email to %s: %v", receiver, err))
+		// 日志只打印脱敏后的收件人，不得出现明文邮箱。
+		SysError(fmt.Sprintf("failed to send email to %s: %v", MaskEmail(receiver), err))
 	}
 	return err
 }

@@ -31,8 +31,10 @@ func SetApiRouter(router *gin.Engine) {
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/pricing", middleware.TryUserAuth(), controller.GetPricing)
-		apiRouter.GET("/verification", middleware.EmailVerificationRateLimit(), middleware.TurnstileCheck(), controller.SendEmailVerification)
-		apiRouter.GET("/reset_password", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.SendPasswordResetEmail)
+		// 发码/重置：先过人机验证 → 邀请码（仅注册用途）→ 再消耗邮箱配额，
+		// 保证无效人机验证/无效邀请码不会打满目标邮箱日配额、不会发信。
+		apiRouter.GET("/verification", middleware.TurnstileCheckStrict(), middleware.RegistrationInviteGuard(), middleware.EmailSendRateLimit(), controller.SendEmailVerification)
+		apiRouter.GET("/reset_password", middleware.CriticalRateLimit(), middleware.TurnstileCheckStrict(), middleware.EmailSendRateLimit(), controller.SendPasswordResetEmail)
 		apiRouter.POST("/user/reset", middleware.CriticalRateLimit(), controller.ResetPassword)
 		// OAuth routes - specific routes must come before :provider wildcard
 		apiRouter.GET("/oauth/state", middleware.CriticalRateLimit(), controller.GenerateOAuthCode)
@@ -51,7 +53,11 @@ func SetApiRouter(router *gin.Engine) {
 
 		userRoute := apiRouter.Group("/user")
 		{
-			userRoute.POST("/register", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Register)
+			// 注册链：限流 → 16KB 请求体上限 → 严格 Turnstile → 载荷防护（蜜罐/表单令牌）→ 注册。
+			// 注意顺序：Turnstile 在 PayloadGuard 之前，未过人机验证的请求不会被读取/解析 body。
+			userRoute.POST("/register", middleware.CriticalRateLimit(), middleware.RegistrationRateLimit(), middleware.RegistrationBodyLimit(middleware.RegistrationBodyMaxBytes), middleware.TurnstileCheckStrict(), middleware.RegistrationPayloadGuard(), controller.Register)
+			// 一次性注册表单令牌（公开接口，不加注册/Critical 限流，见计划 §2.6）。
+			userRoute.GET("/register/token", controller.GetRegistrationToken)
 			// LoginRateLimit 按账号计数（与 IP 无关），是对可被 X-Forwarded-For 绕过的
 			// CriticalRateLimit 的必要补充。
 			userRoute.POST("/login", middleware.LoginRateLimit(), middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Login)

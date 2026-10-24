@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -10,6 +12,7 @@ import (
 	"github.com/heqiuyu/heqiuyu-api/i18n"
 	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/heqiuyu/heqiuyu-api/oauth"
+	"github.com/heqiuyu/heqiuyu-api/service"
 	"gorm.io/gorm"
 )
 
@@ -26,6 +29,8 @@ func GenerateOAuthCode(c *gin.Context) {
 	if affCode != "" {
 		session.Set("aff", affCode)
 	}
+	// 邀请码随 OAuth state 暂存；每次都覆盖（空值表示清除），避免串用上一次的值。
+	session.Set(inviteCodeSessionKey, strings.TrimSpace(c.Query("invite_code")))
 	session.Set("oauth_state", state)
 	err := session.Save()
 	if err != nil {
@@ -109,6 +114,12 @@ func HandleOAuth(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgOAuthUserDeleted)
 		case *OAuthRegistrationDisabledError:
 			common.ApiErrorI18n(c, i18n.MsgUserRegisterDisabled)
+		case *OAuthRegistrationRateLimitedError:
+			common.ApiErrorI18n(c, i18n.MsgUserRegistrationRateLimited)
+		case *OAuthInviteCodeRequiredError:
+			common.ApiErrorI18n(c, i18n.MsgUserInviteCodeRequired)
+		case *OAuthInviteCodeInvalidError:
+			common.ApiErrorI18n(c, i18n.MsgUserInviteCodeInvalid)
 		default:
 			common.ApiError(c, err)
 		}
@@ -230,6 +241,26 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		return nil, &OAuthRegistrationDisabledError{}
 	}
 
+	// 仅限邀请码注册：OAuth 首登建号必须携带有效邀请码（只读 invite_code_required，
+	// 不受 registration_setting.enabled 影响）；老用户在本函数前半段已直接返回，不校验。
+	inviteRequired := inviteCodeRequired()
+	invitedByUserId := 0
+	if inviteRequired {
+		validatedInviterId, inviteErr := validateInviteCode(sessionInviteCode(session))
+		if inviteErr != nil {
+			if errors.Is(inviteErr, service.ErrInviteCodeRequired) {
+				return nil, &OAuthInviteCodeRequiredError{}
+			}
+			return nil, &OAuthInviteCodeInvalidError{}
+		}
+		invitedByUserId = validatedInviterId
+	}
+
+	// 注册防护：OAuth 首登建号同样受 per-IP/全站注册限流约束（计划 R2 §2）。
+	if decision := service.CheckRegistrationAttempt(c.ClientIP()); !decision.Allowed {
+		return nil, &OAuthRegistrationRateLimitedError{}
+	}
+
 	// Set up new user
 	user.Username = provider.GetProviderPrefix() + strconv.Itoa(model.GetMaxUserId()+1)
 
@@ -250,17 +281,22 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		user.DisplayName = provider.GetName() + " User"
 	}
 	if oauthUser.Email != "" {
-		user.Email = oauthUser.Email
+		// 邮箱统一 lower+trim，与注册/发码/DB 唯一索引的大小写不敏感策略一致。
+		user.Email = strings.ToLower(strings.TrimSpace(oauthUser.Email))
 	}
 	user.Role = common.RoleCommonUser
 	user.Status = common.UserStatusEnabled
 
-	// Handle affiliate code
-	affCode := session.Get("aff")
-	inviterId := 0
-	if affCode != nil {
-		inviterId, _ = model.GetUserIdByAffCode(affCode.(string))
+	// Handle inviter: 开启邀请码时使用邀请码解析出的邀请人；关闭时保留既有 aff 推荐逻辑。
+	inviterId := invitedByUserId
+	if !inviteRequired {
+		if affCode := session.Get("aff"); affCode != nil {
+			inviterId, _ = model.GetUserIdByAffCode(affCode.(string))
+		}
 	}
+	// 写入邀请人归因（users.inviter_id）：0 也显式设置。InsertWithTx 的 inviterId 参数
+	// 只用于奖励/日志，不会落库 inviter_id，因此这里显式赋值，保证与管理端归因一致。
+	user.InviterId = inviterId
 
 	// Use transaction to ensure user creation and OAuth binding are atomic
 	if genericProvider, ok := provider.(*oauth.GenericOAuthProvider); ok {
@@ -320,6 +356,8 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		user.FinalizeOAuthUserCreation(inviterId)
 	}
 
+	// 建号成功后回写成功计数（小时/日/全站上限）。
+	service.RecordRegistrationSuccess(c.ClientIP())
 	return user, nil
 }
 
@@ -334,6 +372,27 @@ type OAuthRegistrationDisabledError struct{}
 
 func (e *OAuthRegistrationDisabledError) Error() string {
 	return "registration is disabled"
+}
+
+// OAuthRegistrationRateLimitedError 表示 OAuth 首登建号被注册防护限流拒绝。
+type OAuthRegistrationRateLimitedError struct{}
+
+func (e *OAuthRegistrationRateLimitedError) Error() string {
+	return "registration is rate limited"
+}
+
+// OAuthInviteCodeRequiredError 表示"仅限邀请码注册"开启但 OAuth 首登未携带邀请码。
+type OAuthInviteCodeRequiredError struct{}
+
+func (e *OAuthInviteCodeRequiredError) Error() string {
+	return "invite code is required"
+}
+
+// OAuthInviteCodeInvalidError 表示 OAuth 首登携带的邀请码无效。
+type OAuthInviteCodeInvalidError struct{}
+
+func (e *OAuthInviteCodeInvalidError) Error() string {
+	return "invite code is invalid"
 }
 
 // handleOAuthError handles OAuth errors and returns translated message

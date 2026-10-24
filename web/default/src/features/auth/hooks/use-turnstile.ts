@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import i18next from 'i18next'
 import { toast } from 'sonner'
 import { useStatus } from '@/hooks/use-status'
@@ -9,6 +9,7 @@ import { useStatus } from '@/hooks/use-status'
 export function useTurnstile() {
   const { status } = useStatus()
   const [turnstileToken, setTurnstileToken] = useState('')
+  const [resetSignal, setResetSignal] = useState(0)
 
   const isTurnstileEnabled = !!(
     status?.turnstile_check && status?.turnstile_site_key
@@ -28,11 +29,23 @@ export function useTurnstile() {
     return true
   }
 
+  /**
+   * Drop the current token and reset the widget.
+   * Turnstile tokens are single-use (strict mode verifies every request), so a
+   * new token must be obtained after each submission attempt.
+   */
+  const resetTurnstile = useCallback(() => {
+    setTurnstileToken('')
+    setResetSignal((value) => value + 1)
+  }, [])
+
   return {
     isTurnstileEnabled,
     turnstileSiteKey,
     turnstileToken,
     setTurnstileToken,
     validateTurnstile,
+    resetSignal,
+    resetTurnstile,
   }
 }

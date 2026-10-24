@@ -20,6 +20,7 @@ import (
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/middleware"
 	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/service"
 )
 
 // TestSelfChangePasswordKeepsUsername 锁定「个人中心改自己的密码会把用户名/显示名清空」。
@@ -284,5 +285,69 @@ func TestAdminUpdateUserCannotBlankUsername(t *testing.T) {
 	}
 	if !common.ValidatePasswordAndHash("newpass456", repaired.Password) {
 		t.Errorf("补填用户名时的新密码未生效")
+	}
+}
+
+// TestRegisterRejectsEmptyUsername 注册接口必须拒绝空用户名。
+//
+// 旧实现只校验 username 的 max=20，空串能通过，于是能直接创建出
+// 「用户名为空」的账号——这种账号一注册完就被鉴权中间件 403 锁死。
+func TestRegisterRejectsEmptyUsername(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	common.UsingSQLite = true
+	common.UsingMySQL = false
+	common.UsingPostgreSQL = false
+	common.RedisEnabled = false
+	common.MemoryCacheEnabled = false
+	common.PasswordLoginEnabled = true
+	common.RegisterEnabled = true
+	common.PasswordRegisterEnabled = true
+
+	// 注册链新增的限流/邮件队列是进程级全局状态：本文件与 registration_defense_e2e_test.go
+	// 共享同一个测试二进制，必须重置，保证“默认阈值下单次注册通过”。
+	service.ResetRegistrationGuardForTests()
+	service.ResetMailQueueForTests()
+
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	model.DB = db
+	model.LOG_DB = db
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+	if err := db.AutoMigrate(&model.User{}, &model.Log{}, &model.Token{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	engine := gin.New()
+	engine.Use(middleware.I18n())
+	engine.Use(sessions.Sessions("session", cookie.NewStore([]byte("e2e-secret"))))
+	SetApiRouter(engine)
+	server := httptest.NewServer(engine)
+	defer server.Close()
+
+	payload, _ := json.Marshal(map[string]any{
+		"username": "   ",
+		"password": "Password123",
+	})
+	res, err := http.Post(server.URL+"/api/user/register", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("POST /api/user/register: %v", err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	t.Logf("POST /api/user/register (empty username) -> %d %s", res.StatusCode, truncate(string(body), 200))
+	if strings.Contains(string(body), `"success":true`) {
+		t.Errorf("空用户名的注册请求不应成功: %d %s", res.StatusCode, string(body))
+	}
+	var cnt int64
+	db.Model(&model.User{}).Count(&cnt)
+	if cnt != 0 {
+		t.Errorf("空用户名注册后不应写入用户记录，实际 %d 条", cnt)
 	}
 }

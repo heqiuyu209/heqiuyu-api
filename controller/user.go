@@ -24,6 +24,7 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
@@ -176,24 +177,87 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordRegisterDisabled)
 		return
 	}
-	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
+	// 局部请求结构：保留 model.User 的既有字段解析，同时接收邀请码与旧版推荐码字段。
+	var req struct {
+		model.User
+		// InviteCode 是"仅限邀请码注册"开启时必须携带的邀请码（任意用户 aff_code）。
+		InviteCode string `json:"invite_code"`
+		// Aff 兼容旧前端的推荐码字段；关闭邀请码时作为 aff_code 的回退来源。
+		Aff string `json:"aff"`
+	}
+	err := json.NewDecoder(c.Request.Body).Decode(&req)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	user := req.User
+	// 用户名是登录标识：空用户名创建出来的账号会被鉴权中间件直接 403 锁死，
+	// 且管理员编辑抽屉无法改回，只能手工改库。这里与 CreateUser 保持一致地拒绝空用户名。
+	user.Username = strings.TrimSpace(user.Username)
+	if user.Username == "" {
+		common.ApiErrorI18n(c, i18n.MsgUserUsernameRequired)
+		return
+	}
+	// 邮箱规范化：验证码/邮件发送/占用检查必须使用同一套归一化结果。
+	user.Email = strings.ToLower(strings.TrimSpace(user.Email))
 	if err := common.Validate.Struct(&user); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
+	// 邀请码校验独立于注册防护总开关（只读 invite_code_required）：
+	// 开启时先校验邀请码，失败立即返回，不消耗/不锁定邮箱验证码；
+	// 关闭时完全不调用邀请码校验与 aff_code 查询（除非走既有推荐逻辑）。
+	inviteRequired := inviteCodeRequired()
+	inviterId := 0
+	if inviteRequired {
+		validatedInviterId, err := validateInviteCode(req.InviteCode)
+		if err != nil {
+			respondInviteCodeError(c, err)
+			return
+		}
+		inviterId = validatedInviterId
+	}
+	// verifiedPurpose 记录本次注册实际使用的邮箱验证码 purpose（成功/失败清码用）。
+	verifiedPurpose := ""
 	if common.EmailVerificationEnabled {
 		if user.Email == "" || user.VerificationCode == "" {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
 			return
 		}
-		if !common.VerifyCodeWithKey(user.Email, user.VerificationCode, common.EmailVerificationPurpose) {
+		// 失败计数/锁定必须按"实际尝试的 purpose"：
+		//   - 开启邀请码：只试注册专用 "vr"，普通 "v" 不能用于注册；
+		//   - 关闭邀请码：若 "vr" 仍存在则只试 "vr"（不回退，避免 "v" 绕过），
+		//     否则才试 "v"。
+		verifiedPurpose = common.EmailVerificationPurpose
+		if inviteRequired || common.HasVerificationCode(user.Email, common.RegistrationEmailVerificationPurpose) {
+			verifiedPurpose = common.RegistrationEmailVerificationPurpose
+		}
+		verified := common.VerifyCodeWithKey(user.Email, user.VerificationCode, verifiedPurpose)
+		if !verified {
+			// 错误次数限制：同一邮箱在窗口内错误 5 次后锁定，防止验证码被暴力猜测。
+			locked, retryAfter := service.RegisterVerificationFailure(user.Email, verifiedPurpose)
+			if locked {
+				// 计划 §5.4：错误次数达到上限后删除实际 purpose 的验证码，窗口内即使猜中也无法继续使用。
+				common.DeleteKey(user.Email, verifiedPurpose)
+				if retryAfter <= 0 {
+					retryAfter = 60
+				}
+				c.Header("Retry-After", strconv.Itoa(retryAfter))
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"success": false,
+					"message": i18n.T(c, i18n.MsgUserVerificationAttemptsLimit),
+				})
+				return
+			}
 			common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
 			return
+		}
+		// 成功清除对应计数（同时清另一个 purpose，避免残留锁定影响后续注册/绑定）。
+		service.ClearVerificationFailures(user.Email, verifiedPurpose)
+		if verifiedPurpose == common.RegistrationEmailVerificationPurpose {
+			service.ClearVerificationFailures(user.Email, common.EmailVerificationPurpose)
+		} else {
+			service.ClearVerificationFailures(user.Email, common.RegistrationEmailVerificationPurpose)
 		}
 	}
 	exist, err := model.CheckUserExistOrDeleted(user.Username, user.Email)
@@ -206,8 +270,14 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserExists)
 		return
 	}
-	affCode := user.AffCode // this code is the inviter's code, not the user's own code
-	inviterId, _ := model.GetUserIdByAffCode(affCode)
+	if !inviteRequired {
+		// 关闭邀请码时：inviter 走现有推荐逻辑（aff_code，兼容旧 aff 字段）。
+		affCode := user.AffCode // this code is the inviter's code, not the user's own code
+		if req.Aff != "" {
+			affCode = req.Aff
+		}
+		inviterId, _ = model.GetUserIdByAffCode(affCode)
+	}
 	cleanUser := model.User{
 		Username:    user.Username,
 		Password:    user.Password,
@@ -219,8 +289,20 @@ func Register(c *gin.Context) {
 		cleanUser.Email = user.Email
 	}
 	if err := cleanUser.Insert(inviterId); err != nil {
+		// 唯一索引冲突（并发注册同用户名/邮箱）统一返回 user.exists，避免 500。
+		if isUniqueConstraintViolation(err) {
+			common.ApiErrorI18n(c, i18n.MsgUserExists)
+			return
+		}
 		common.ApiError(c, err)
 		return
+	}
+	// 成功计数回写到注册限流（小时/日/全站上限）。
+	service.RecordRegistrationSuccess(c.ClientIP())
+	// 注册成功后删除本次实际使用的验证码，避免同一验证码被重放注册。
+	if common.EmailVerificationEnabled && verifiedPurpose != "" {
+		common.DeleteKey(user.Email, verifiedPurpose)
+		service.ClearVerificationFailures(user.Email, verifiedPurpose)
 	}
 
 	// 获取插入后的用户ID
@@ -263,6 +345,23 @@ func Register(c *gin.Context) {
 		"message": "",
 	})
 	return
+}
+
+// isUniqueConstraintViolation 判断数据库错误是否由唯一索引冲突引起。
+//
+// GORM 的 ErrDuplicatedKey 依赖 TranslateError 配置，因此同时匹配常见驱动的
+// 错误文本（SQLite "UNIQUE constraint failed"、MySQL "Duplicate entry"）。
+func isUniqueConstraintViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "unique constraint") ||
+		strings.Contains(message, "duplicate entry") ||
+		strings.Contains(message, "unique failed")
 }
 
 func GetAllUsers(c *gin.Context) {
@@ -1117,12 +1216,28 @@ func EmailBind(c *gin.Context) {
 		common.ApiError(c, errors.New("invalid request body"))
 		return
 	}
-	email := req.Email
+	email := strings.ToLower(strings.TrimSpace(req.Email))
 	code := req.Code
 	if !common.VerifyCodeWithKey(email, code, common.EmailVerificationPurpose) {
+		// 绑定邮箱同样受验证码错误次数限制，防止验证码被暴力猜测。
+		locked, retryAfter := service.RegisterVerificationFailure(email, common.EmailVerificationPurpose)
+		if locked {
+			// 计划 §5.4：错误次数达到上限后删除验证码，窗口内即使猜中也无法继续使用。
+			common.DeleteKey(email, common.EmailVerificationPurpose)
+			if retryAfter <= 0 {
+				retryAfter = 60
+			}
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"message": i18n.T(c, i18n.MsgUserVerificationAttemptsLimit),
+			})
+			return
+		}
 		common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
 		return
 	}
+	service.ClearVerificationFailures(email, common.EmailVerificationPurpose)
 	session := sessions.Default(c)
 	id := session.Get("id")
 	user := model.User{
@@ -1140,6 +1255,9 @@ func EmailBind(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 绑定成功即消费验证码：删除验证码并清除错误计数，保证一次性（不可重放绑定）。
+	common.DeleteKey(email, common.EmailVerificationPurpose)
+	service.ClearVerificationFailures(email, common.EmailVerificationPurpose)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

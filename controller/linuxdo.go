@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/heqiuyu/heqiuyu-api/common"
+	"github.com/heqiuyu/heqiuyu-api/i18n"
 	"github.com/heqiuyu/heqiuyu-api/model"
+	"github.com/heqiuyu/heqiuyu-api/service"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -221,16 +223,34 @@ func LinuxdoOAuth(c *gin.Context) {
 	} else {
 		if common.RegisterEnabled {
 			if linuxdoUser.TrustLevel >= common.LinuxDOMinimumTrustLevel {
+				// 仅限邀请码注册：先校验邀请码（首登建号必须携带有效邀请码）；
+				// 关闭时保留既有 aff 推荐逻辑。
+				inviteRequired := inviteCodeRequired()
+				inviterId := 0
+				if inviteRequired {
+					validatedInviterId, inviteErr := validateInviteCode(sessionInviteCode(session))
+					if inviteErr != nil {
+						respondInviteCodeError(c, inviteErr)
+						return
+					}
+					inviterId = validatedInviterId
+				}
+				// 注册防护：OAuth 首登建号同样受注册防护限流约束（计划 R2 §2）。
+				if decision := service.CheckRegistrationAttempt(c.ClientIP()); !decision.Allowed {
+					common.ApiErrorI18n(c, i18n.MsgUserRegistrationRateLimited)
+					return
+				}
 				user.Username = "linuxdo_" + strconv.Itoa(model.GetMaxUserId()+1)
 				user.DisplayName = linuxdoUser.Name
 				user.Role = common.RoleCommonUser
 				user.Status = common.UserStatusEnabled
-
-				affCode := session.Get("aff")
-				inviterId := 0
-				if affCode != nil {
-					inviterId, _ = model.GetUserIdByAffCode(affCode.(string))
+				if !inviteRequired {
+					if affCode := session.Get("aff"); affCode != nil {
+						inviterId, _ = model.GetUserIdByAffCode(affCode.(string))
+					}
 				}
+				// 写入邀请人归因：0 也显式设置；Insert 的 inviterId 参数只用于奖励/日志。
+				user.InviterId = inviterId
 
 				if err := user.Insert(inviterId); err != nil {
 					c.JSON(http.StatusOK, gin.H{
@@ -239,6 +259,7 @@ func LinuxdoOAuth(c *gin.Context) {
 					})
 					return
 				}
+				service.RecordRegistrationSuccess(c.ClientIP())
 			} else {
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,

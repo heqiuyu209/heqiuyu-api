@@ -115,6 +115,15 @@ const (
 	MsgUserTelegramNotBound          = "user.telegram_not_bound"
 	MsgUserLinuxDOIdEmpty            = "user.linux_do_id_empty"
 	MsgUserQuotaChangeZero           = "user.quota_change_zero"
+	MsgUserRegistrationRateLimited   = "user.registration_rate_limited"
+	MsgUserEmailSendRateLimited      = "user.email_send_rate_limited"
+	MsgUserEmailSendUnavailable      = "user.email_send_unavailable"
+	MsgUserVerificationAttemptsLimit = "user.verification_attempts_exceeded"
+	MsgUserRegistrationRejected      = "user.registration_rejected"
+	MsgUserRequestBodyTooLarge       = "user.request_body_too_large"
+	MsgUserInviteCodeRequired        = "user.invite_code_required"
+	MsgUserInviteCodeInvalid         = "user.invite_code_invalid"
+	MsgUserInviteCodeAttemptsLimit   = "user.invite_code_attempts_limit"
 )
 
 // Quota related messages

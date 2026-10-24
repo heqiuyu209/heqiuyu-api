@@ -107,6 +107,30 @@ export type AuthSettings = {
   'passkey.allow_insecure_origin': boolean
   'passkey.user_verification': 'required' | 'preferred' | 'discouraged'
   'passkey.attachment_preference': '' | 'platform' | 'cross-platform'
+  'registration_setting.enabled': boolean
+  'registration_setting.turnstile_strict': boolean
+  'registration_setting.ip_attempt_window_seconds': number
+  'registration_setting.ip_max_attempts_per_window': number
+  'registration_setting.ip_max_success_per_hour': number
+  'registration_setting.ip_max_success_per_day': number
+  'registration_setting.ip_allowlist': string
+  'registration_setting.global_max_success_per_hour': number
+  'registration_setting.email_cooldown_seconds': number
+  'registration_setting.email_max_per_day': number
+  'registration_setting.email_ip_max_per_hour': number
+  'registration_setting.email_global_max_per_hour': number
+  'registration_setting.verification_max_attempts': number
+  'registration_setting.verification_attempt_window_seconds': number
+  'registration_setting.honeypot_enabled': boolean
+  'registration_setting.form_token_enabled': boolean
+  'registration_setting.form_token_min_seconds': number
+  'registration_setting.form_token_max_minutes': number
+  'registration_setting.async_email_enabled': boolean
+  'registration_setting.async_email_queue_size': number
+  'registration_setting.async_email_workers': number
+  'registration_setting.async_email_max_per_minute': number
+  'registration_setting.async_email_breaker_failures': number
+  'registration_setting.invite_code_required': boolean
 }
 
 export type ContentSettings = {

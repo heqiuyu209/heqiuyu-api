@@ -1,13 +1,14 @@
 package controller
 
 import (
+	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/heqiuyu/heqiuyu-api/common"
 	"github.com/heqiuyu/heqiuyu-api/constant"
 	"github.com/heqiuyu/heqiuyu-api/model"
 	"github.com/heqiuyu/heqiuyu-api/setting/operation_setting"
-	"github.com/gin-gonic/gin"
 )
 
 type Setup struct {
@@ -76,6 +77,16 @@ func PostSetup(c *gin.Context) {
 
 	// If root doesn't exist, validate and create admin account
 	if !rootExists {
+		// 用户名是登录标识：空用户名会让 root 账号直接被鉴权中间件 403 锁死，
+		// 而初始化只能成功一次，届时只能手工改库。这里先拒绝空用户名。
+		req.Username = strings.TrimSpace(req.Username)
+		if req.Username == "" {
+			c.JSON(200, gin.H{
+				"success": false,
+				"message": "用户名不能为空",
+			})
+			return
+		}
 		// Validate username length: max 12 characters to align with model.User validation
 		if len(req.Username) > 12 {
 			c.JSON(200, gin.H{

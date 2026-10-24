@@ -21,6 +21,12 @@ export interface RegisterPayload {
   verification_code?: string
   aff?: string
   turnstile?: string
+  // Honeypot field: must stay empty when registration_honeypot_enabled
+  website?: string
+  // One-time form token, required when registration_form_token_enabled
+  form_token?: string
+  // Invite code, required when registration_setting.invite_code_required is on
+  invite_code?: string
 }
 
 export interface PasswordResetPayload {
@@ -31,6 +37,10 @@ export interface PasswordResetPayload {
 export interface EmailVerificationPayload {
   email: string
   turnstile?: string
+  // Invite code (only needed when registration requires one)
+  invite_code?: string
+  // Verification purpose: "register" writes a registration-scoped code
+  purpose?: string
 }
 
 export interface BindEmailPayload {
@@ -61,6 +71,16 @@ export interface ApiResponse {
   success: boolean
   message: string
   data?: unknown
+}
+
+export interface RegistrationTokenResponse {
+  success: boolean
+  message: string
+  data?: {
+    token: string
+    min_seconds: number
+    expires_in: number
+  }
 }
 
 // ============================================================================
@@ -109,6 +129,9 @@ export interface SystemStatus {
     oauth_register_enabled?: boolean
     register_enabled?: boolean
     password_register_enabled?: boolean
+    registration_form_token_enabled?: boolean
+    registration_honeypot_enabled?: boolean
+    invite_code_required?: boolean
     custom_oauth_providers?: CustomOAuthProviderInfo[]
     [key: string]: unknown
   }
@@ -151,6 +174,9 @@ export interface SystemStatus {
   oauth_register_enabled?: boolean
   register_enabled?: boolean
   password_register_enabled?: boolean
+  registration_form_token_enabled?: boolean
+  registration_honeypot_enabled?: boolean
+  invite_code_required?: boolean
   custom_oauth_providers?: CustomOAuthProviderInfo[]
   [key: string]: unknown
 }
