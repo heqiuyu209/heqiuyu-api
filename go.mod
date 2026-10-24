@@ -1,7 +1,7 @@
 module github.com/heqiuyu/heqiuyu-api
 
 // +heroku goVersion go1.18
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/abema/go-mp4 v1.4.1
